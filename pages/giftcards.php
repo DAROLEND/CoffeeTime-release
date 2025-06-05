@@ -40,7 +40,7 @@ if ($result && mysqli_num_rows($result) > 0) {
     <div class="gift-grid">
       <?php foreach ($giftcards as $card): ?>
         <?php
-          $url = "/Project/pages/cart.php?action=add&category=giftcards&id=" . (int)$card['id'];
+          $url = "/CoffeeTime-release/pages/cart.php?action=add&category=giftcards&id=" . (int)$card['id'];
         ?>
         <div class="gift-item">
           <img src="../<?= htmlspecialchars($card['image']) ?>" alt="Coffee Time">
