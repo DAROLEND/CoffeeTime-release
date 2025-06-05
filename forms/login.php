@@ -39,10 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: ../pages/index.php');
                 exit;
             } else {
-                $error = '❌ Невірний пароль.';
+                $error = 'Невірний пароль.';
             }
         } else {
-            $error = '❌ Користувача не знайдено.';
+            $error = 'Користувача не знайдено.';
         }
 
         $stmt->close();
@@ -56,14 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Авторизація — Coffee Time</title>
-  <!-- Основні стилі -->
   <link rel="stylesheet" href="../static/css/style.css">
   <link rel="stylesheet" href="../static/css/auth.css">
   <link rel="stylesheet" href="../static/css/footer.css">
-  <!-- за потреби можна добавить інші CSS тут -->
+
 </head>
 <body>
-  <!-- Ваша шапка сайту -->
   <?php include '../includes/header.php'; ?>
 
   <main class="auth-container">
@@ -125,10 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </main>
 
-  <!-- Ваш футер сайту -->
   <?php include '../includes/footer.php'; ?>
 
-  <!-- Скріпт для показу/приховування пароля -->
   <script>
     document.querySelectorAll('.toggle-password').forEach(btn => {
       btn.addEventListener('click', () => {

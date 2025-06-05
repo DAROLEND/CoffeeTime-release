@@ -10,7 +10,6 @@ $error = '';
 $success = false;
 
 if ($token) {
-    // Перевірка токена
     $stmt = $conn->prepare("SELECT email, expires_at FROM password_resets WHERE token = ?");
     $stmt->bind_param("s", $token);
     $stmt->execute();
@@ -18,22 +17,20 @@ if ($token) {
 
     if ($row = $result->fetch_assoc()) {
         if (strtotime($row['expires_at']) < time()) {
-            $error = '⏰ Термін дії токена вичерпано.';
+            $error = 'Термін дії токена вичерпано.';
         } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = $_POST['password'] ?? '';
             $confirm = $_POST['confirm'] ?? '';
             if ($password !== $confirm) {
-                $error = '❌ Паролі не співпадають.';
+                $error = 'Паролі не співпадають.';
             } elseif (strlen($password) < 6) {
-                $error = '❌ Пароль повинен містити щонайменше 6 символів.';
+                $error = 'Пароль повинен містити щонайменше 6 символів.';
             } else {
-                // Хешування нового пароля
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $conn->prepare("UPDATE users SET password = ? WHERE email = ?");
                 $stmt->bind_param("ss", $hashed, $row['email']);
                 $stmt->execute();
 
-                // Видалення токена
                 $stmt = $conn->prepare("DELETE FROM password_resets WHERE token = ?");
                 $stmt->bind_param("s", $token);
                 $stmt->execute();
@@ -42,10 +39,10 @@ if ($token) {
             }
         }
     } else {
-        $error = '❌ Недійсний токен.';
+        $error = 'Недійсний токен.';
     }
 } else {
-    $error = '❌ Токен не вказано.';
+    $error = 'Токен не вказано.';
 }
 ?>
 
@@ -53,25 +50,28 @@ if ($token) {
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Скидання пароля</title>
+  <title>Скидання пароля — Coffee Time</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../static/css/style.css">
+  <link rel="stylesheet" href="../static/css/reset.css">
 </head>
 <body>
-  <h1>Скидання пароля</h1>
+  <div class="reset-container">
+    <h1>Скидання пароля</h1>
 
-  <?php if ($success): ?>
-    <p>✅ Пароль успішно змінено. <a href="login.php">Увійти</a></p>
-  <?php elseif ($error): ?>
-    <p style="color: red"><?= $error ?></p>
-  <?php endif; ?>
+    <?php if ($success): ?>
+      <p class="success">Пароль успішно змінено.<br><a href="../pages/index.php">→ Повернутися на головну</a></p>
+    <?php elseif ($error): ?>
+      <p class="error"><?= htmlspecialchars($error) ?></p>
+    <?php endif; ?>
 
-  <?php if (!$success && empty($error)): ?>
-    <form method="post">
-      <label>Новий пароль:</label><br>
-      <input type="password" name="password" required><br><br>
-      <label>Підтвердіть пароль:</label><br>
-      <input type="password" name="confirm" required><br><br>
-      <button type="submit">Зберегти</button>
-    </form>
-  <?php endif; ?>
+    <?php if (!$success && empty($error)): ?>
+      <form method="post">
+        <input type="password" name="password" placeholder="Новий пароль" required>
+        <input type="password" name="confirm" placeholder="Підтвердіть пароль" required>
+        <button type="submit">Зберегти</button>
+      </form>
+    <?php endif; ?>
+  </div>
 </body>
 </html>

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost
--- Час створення: Чрв 04 2025 р., 10:41
+-- Час створення: Чрв 05 2025 р., 21:36
 -- Версія сервера: 10.4.28-MariaDB
 -- Версія PHP: 8.2.4
 
@@ -20,6 +20,25 @@ SET time_zone = "+00:00";
 --
 -- База даних: `CoffeeTime`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблиці `admin_users`
+--
+
+CREATE TABLE `admin_users` (
+  `id` int(11) NOT NULL,
+  `username` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Дамп даних таблиці `admin_users`
+--
+
+INSERT INTO `admin_users` (`id`, `username`, `password`) VALUES
+(1, 'admin', '$2y$12$qZ7i8uQVrQhT9.VBzHa0purENJa26gSnZsGpTuNxHJQFCFHJjxYpm');
 
 -- --------------------------------------------------------
 
@@ -41,9 +60,9 @@ CREATE TABLE `coffee_items` (
 --
 
 INSERT INTO `coffee_items` (`id`, `name`, `description`, `image`, `price`, `popularity`) VALUES
-(1, 'Еспресо', 'Сильний та ароматний еспресо', 'static/images/categories/coffee_category.jpg', 50.00, 0),
-(2, 'Капучино', 'Кремовий капучино з молоком', 'static/images/categories/coffee_category.jpg', 60.00, 13),
-(3, 'Латте', 'Латте з ніжним молоком', 'static/images/categories/coffee_category.jpg', 65.00, 0);
+(1, 'Еспресо', 'Сильний та ароматний еспресо', 'static/images/menu_items/coffee/espresso.png', 50.00, 0),
+(2, 'Капучино', 'Кремовий капучино з молоком', 'static/images/menu_items/coffee/capuccino.png', 60.00, 16),
+(3, 'Латте', 'Латте з ніжним молоком', 'static/images/menu_items/coffee/latte.png', 65.00, 0);
 
 -- --------------------------------------------------------
 
@@ -65,9 +84,9 @@ CREATE TABLE `cold_drink_items` (
 --
 
 INSERT INTO `cold_drink_items` (`id`, `name`, `description`, `image`, `price`, `popularity`) VALUES
-(1, 'Лимонад', 'Смачний лимонад на основі цитрусових', 'static/images/menu_items/lemonade.png', 50.00, 0),
-(2, 'Мохіто', 'Охолоджений мохіто з м’ятою', 'static/images/menu_items/mohito.jpg', 60.00, 0),
-(3, 'Смузі', 'Фрукти в пікантному смузі', 'static/images/menu_items/smoothie.png', 65.00, 5);
+(1, 'Лимонад', 'Смачний лимонад на основі цитрусових', 'static/images/menu_items/cold_drinks/lemonade.png', 50.00, 0),
+(2, 'Мохіто', 'Охолоджений мохіто з м’ятою', 'static/images/menu_items/cold_drinks/mohito.jpg', 60.00, 0),
+(3, 'Смузі', 'Фрукти в пікантному смузі', 'static/images/menu_items/cold_drinks/smoothie.png', 65.00, 5);
 
 -- --------------------------------------------------------
 
@@ -89,9 +108,9 @@ CREATE TABLE `dessert_items` (
 --
 
 INSERT INTO `dessert_items` (`id`, `name`, `description`, `image`, `price`, `popularity`) VALUES
-(1, 'Торт', 'Ніжний торт з шоколадною глазур’ю', 'static/images/categories/dessert.jpg', 90.00, 0),
-(2, 'Пиріжок', 'Пиріжок з фруктовою начинкою', 'static/images/categories/dessert.jpg', 50.00, 0),
-(3, 'Мафін', 'Мафін з ягодами та шоколадом', 'static/images/categories/dessert.jpg', 45.00, 1);
+(1, 'Львівський сирник', 'Крафтовий, ніжний, з ідеальним балансом смаку', 'static/images/menu_items/desserts/lviv_sirnik.png', 90.00, 1),
+(2, 'Карамельний тарт', 'Хрумка основа, ніжна карамель і неймовірний шоколад ', 'static/images/menu_items/desserts/tart.png', 80.00, 0),
+(3, 'Мусовий десерт', 'Шоколад, карамель, велюр — гармонія в кожному шматочку', 'static/images/menu_items/desserts/muss.png', 110.00, 1);
 
 -- --------------------------------------------------------
 
@@ -113,9 +132,9 @@ CREATE TABLE `fast_food_items` (
 --
 
 INSERT INTO `fast_food_items` (`id`, `name`, `description`, `image`, `price`, `popularity`) VALUES
-(1, 'Бургер', 'Соковитий бургер з м’ясом', 'static/images/menu_items/burger.png', 120.00, 1),
-(2, 'Фрі', 'Хрустка картопля фрі', 'static/images/menu_items/fries_potato.png', 40.00, 0),
-(3, 'Хот-Дог', 'Класичний французький хот-дог', 'static/images/menu_items/hot-dog.png', 70.00, 4);
+(1, 'Бургер', 'Соковитий бургер з м’ясом', 'static/images/menu_items/fast_food/burger.png', 120.00, 1),
+(2, 'Фрі', 'Хрустка картопля фрі', 'static/images/menu_items/fast_food/fries_potato.png', 40.00, 0),
+(3, 'Хот-Дог', 'Класичний французький хот-дог!', 'static/images/menu_items/fast_food/hot-dog.png', 60.00, 4);
 
 -- --------------------------------------------------------
 
@@ -151,7 +170,7 @@ CREATE TABLE `orders` (
   `total` decimal(10,2) NOT NULL DEFAULT 0.00,
   `delivery_address` varchar(255) DEFAULT '',
   `phone` varchar(20) DEFAULT NULL,
-  `status` enum('pending','completed','cancelled') NOT NULL DEFAULT 'pending',
+  `status` enum('pending','approved','declined') NOT NULL DEFAULT 'pending',
   `customer_name` varchar(100) DEFAULT NULL,
   `customer_surname` varchar(100) DEFAULT NULL,
   `comment` text DEFAULT NULL,
@@ -165,21 +184,10 @@ CREATE TABLE `orders` (
 --
 
 INSERT INTO `orders` (`order_id`, `user_id`, `total`, `delivery_address`, `phone`, `status`, `customer_name`, `customer_surname`, `comment`, `ready_time`, `payment_method`, `created_at`) VALUES
-(6, 3, 230.00, '', '+380991508970', 'pending', 'Андрій', 'Слаб', '', '10:30', 'cash_on_pickup', '2025-05-14 09:58:02'),
-(7, 4, 240.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '19:30', 'cash_on_pickup', '2025-05-15 15:56:17'),
-(8, 4, 630.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '19:00', 'cash_on_pickup', '2025-05-26 15:22:12'),
-(9, 4, 60.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '11:00', 'cash_on_pickup', '2025-05-31 04:11:12'),
-(10, 4, 60.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '11:00', 'cash_on_pickup', '2025-05-31 04:21:51'),
-(11, 4, 60.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '12:00', 'cash_on_pickup', '2025-05-31 04:22:04'),
-(12, 4, 60.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '12:00', 'cash_on_pickup', '2025-05-31 04:24:49'),
-(13, 5, 120.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '12:30', 'cash_on_pickup', '2025-06-01 18:46:09'),
-(14, 5, 280.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '19:30', 'cash_on_pickup', '2025-06-01 18:47:12'),
-(15, 5, 280.00, '', '+380991508970', 'pending', 'А', 'Слаб', '', '19:30', 'cash_on_pickup', '2025-06-01 18:54:24'),
-(16, 5, 325.00, '', '+380991508970', 'pending', 'А', 'Слаб', '', '19:30', 'cash_on_pickup', '2025-06-01 18:54:57'),
-(17, 5, 220.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '18:30', 'cash_on_pickup', '2025-06-01 19:02:15'),
-(18, 5, 360.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '19:30', 'cash_on_pickup', '2025-06-01 19:05:24'),
-(19, 5, 420.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '19:30', 'cash_on_pickup', '2025-06-01 19:08:44'),
-(20, 5, 475.00, '', '+380991508970', 'pending', 'Андрій', 'Слаб', '', '19:30', 'cash_on_pickup', '2025-06-01 19:13:13');
+(22, 5, 300.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', '', '19:30', 'cash_on_pickup', '2025-06-05 20:00:17'),
+(23, 5, 560.00, '', '+380991508970', 'pending', 'Андрій', 'Слабіцький', 'Сертифікат для друга', '19:30', 'cash_on_pickup', '2025-06-05 20:48:33'),
+(24, 5, 560.00, '', '+380991508970', 'pending', 'Андрій', 'Слаб', 'Друг', '19:30', 'cash_on_pickup', '2025-06-05 20:49:02'),
+(25, 5, 560.00, '', '+380991508970', 'pending', 'German', 'Germanich', '=', '19:30', 'cash_on_pickup', '2025-06-05 20:50:37');
 
 -- --------------------------------------------------------
 
@@ -192,25 +200,23 @@ CREATE TABLE `order_items` (
   `order_id` int(11) NOT NULL,
   `product_id` int(11) NOT NULL,
   `quantity` int(11) NOT NULL DEFAULT 1,
-  `price` decimal(10,2) NOT NULL DEFAULT 0.00
+  `price` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `category` varchar(50) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Дамп даних таблиці `order_items`
 --
 
-INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `quantity`, `price`) VALUES
-(1, 12, 2, 1, 60.00),
-(2, 13, 1, 1, 120.00),
-(3, 14, 3, 4, 70.00),
-(4, 15, 3, 4, 70.00),
-(5, 16, 3, 5, 65.00),
-(6, 17, 3, 1, 220.00),
-(7, 18, 2, 6, 60.00),
-(8, 19, 2, 7, 60.00),
-(9, 20, 2, 1, 210.00),
-(10, 20, 3, 1, 220.00),
-(11, 20, 3, 1, 45.00);
+INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `quantity`, `price`, `category`) VALUES
+(13, 22, 2, 1, 210.00, 'pizza_items'),
+(14, 22, 1, 1, 90.00, 'dessert_items'),
+(15, 23, 2, 1, 60.00, 'coffee_items'),
+(16, 23, 1, 1, 500.00, 'giftcards'),
+(17, 24, 2, 1, 60.00, 'coffee_items'),
+(18, 24, 1, 1, 500.00, 'giftcards'),
+(19, 25, 2, 1, 60.00, 'coffee_items'),
+(20, 25, 1, 1, 500.00, 'giftcards');
 
 -- --------------------------------------------------------
 
@@ -233,7 +239,10 @@ CREATE TABLE `password_resets` (
 INSERT INTO `password_resets` (`id`, `email`, `token`, `expires_at`, `created_at`) VALUES
 (1, 'magicrush1221@gmail.com', '7f33e1447dc38e10f5865b1819dc329f5bfee5f0a42e8979c2dfe42498d4b0a7', '2025-05-31 20:58:42', '2025-05-31 17:58:42'),
 (2, 'magicrush1221@gmail.com', 'fd304a7d95d138a23d75b61ec4d9ce3c9f85b3e7eb86df5d663c571ed1d5065e', '2025-05-31 21:00:34', '2025-05-31 18:00:34'),
-(4, 'magicrush1221@gmail.com', '170d25be3927b5cd3e19c6bcac99f0dc81dbf89c7ffa8707d7f53a831b8ca028', '2025-05-31 21:32:45', '2025-05-31 18:32:45');
+(4, 'magicrush1221@gmail.com', '170d25be3927b5cd3e19c6bcac99f0dc81dbf89c7ffa8707d7f53a831b8ca028', '2025-05-31 21:32:45', '2025-05-31 18:32:45'),
+(5, 'magicrush1221@gmail.com', '36ed9f9655cf1858a51e5cf059c0c65ae5ca6918cf19b66e2fcc84a053c107f0', '2025-06-04 17:52:22', '2025-06-04 14:52:22'),
+(6, 'magicrush1221@gmail.com', '37e683a4b105329d0a90d62fa7b82caac3fd7a785a932824833fa3ff1798c247', '2025-06-05 14:59:47', '2025-06-05 11:59:47'),
+(9, 'magicrush1221@gmail.com', '6d85891d964c07e107fcadf26159d3d69d14b96c86852a972ffd7424cbea61cd', '2025-06-05 15:04:45', '2025-06-05 12:04:45');
 
 -- --------------------------------------------------------
 
@@ -255,9 +264,9 @@ CREATE TABLE `pizza_items` (
 --
 
 INSERT INTO `pizza_items` (`id`, `name`, `description`, `image`, `price`, `popularity`) VALUES
-(1, 'Маргарита', 'Класична піца з моцарелою', 'static/images/menu_items/pizza2.png', 180.00, 0),
-(2, 'Пепероні', 'Піца з пепероні та сиром', 'static/images/menu_items/pizza1.png', 210.00, 1),
-(3, 'Гавайська', 'Піца з ананасами та куркою', 'static/images/menu_items/pizza.png', 220.00, 2);
+(1, 'Маргарита', 'Класична піца з моцарелою', 'static/images/menu_items/pizza/pizza2.png', 180.00, 18),
+(2, 'Пепероні', 'Піца з пепероні та сиром', 'static/images/menu_items/pizza/pizza1.png', 210.00, 2),
+(3, 'Гавайська', 'Піца з ананасами та куркою', 'static/images/menu_items/pizza/pizza.png', 220.00, 2);
 
 -- --------------------------------------------------------
 
@@ -304,7 +313,10 @@ CREATE TABLE `site_reviews` (
 
 INSERT INTO `site_reviews` (`id`, `name`, `text`, `created_at`, `rating`) VALUES
 (1, 'Андрій', 'Все чудово', '2025-06-03 19:41:58', 4),
-(2, 'Ліхтарик', '1', '2025-06-03 19:54:11', 5);
+(2, 'Ліхтарик', '1', '2025-06-03 19:54:11', 5),
+(3, 'Ліхтарик1', 'TOP', '2025-06-04 17:53:35', 5),
+(5, 'Ліхтарик3', 'Все супер', '2025-06-05 02:42:11', 4),
+(6, 'Andrii Leoniev', 'Красота', '2025-06-05 02:42:25', 5);
 
 -- --------------------------------------------------------
 
@@ -330,11 +342,18 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`client_id`, `login`, `email`, `password`, `client_name`, `client_surname`, `client_PhoneNumber`, `created_at`) VALUES
 (3, 'daro', 'slabitskyi1221@gmail.com', '$2y$10$Rom1o9RxOlwvGrtp773hLOwGDtYFOv16eIt20V2O0TBoVhlSSkO26', 'Андрій', 'Слаб', '+380991508970', '2025-05-13 21:18:12'),
 (4, 'DARØ', 'slabik@gmail.com', '$2y$10$hGu9mRrpTwInzMwgMAESSOzyRPL5sSKYLMY/m7YoHYSuNFx7FGicy', 'Андрій', 'Слабіцький', '+380991508970', '2025-05-14 20:46:33'),
-(5, 'Ander', 'magicrush1221@gmail.com', '$2y$10$BO.6F2lWGJhyZRL.iacw3eNpIWmMWUvKp9hmMvorFT0JLaanLsFQ2', NULL, NULL, NULL, '2025-05-31 17:58:14');
+(5, 'Ander', 'magicrush1221@gmail.com', '$2y$10$vnDi1kpTi8lBs2xscvw6pe8IzoaHiyGDHYgDsFdnkMJRypeo.CbcK', NULL, NULL, NULL, '2025-05-31 17:58:14');
 
 --
 -- Індекси збережених таблиць
 --
+
+--
+-- Індекси таблиці `admin_users`
+--
+ALTER TABLE `admin_users`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `username` (`username`);
 
 --
 -- Індекси таблиці `coffee_items`
@@ -421,6 +440,12 @@ ALTER TABLE `users`
 --
 
 --
+-- AUTO_INCREMENT для таблиці `admin_users`
+--
+ALTER TABLE `admin_users`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT для таблиці `coffee_items`
 --
 ALTER TABLE `coffee_items`
@@ -442,7 +467,7 @@ ALTER TABLE `dessert_items`
 -- AUTO_INCREMENT для таблиці `fast_food_items`
 --
 ALTER TABLE `fast_food_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT для таблиці `giftcards`
@@ -454,19 +479,19 @@ ALTER TABLE `giftcards`
 -- AUTO_INCREMENT для таблиці `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `order_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `order_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT для таблиці `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT для таблиці `password_resets`
 --
 ALTER TABLE `password_resets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT для таблиці `pizza_items`
@@ -484,7 +509,7 @@ ALTER TABLE `reservations`
 -- AUTO_INCREMENT для таблиці `site_reviews`
 --
 ALTER TABLE `site_reviews`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT для таблиці `users`

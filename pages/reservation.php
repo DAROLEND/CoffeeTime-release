@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = trim($_POST['phone'] ?? '');
 
     if (empty($tables) || !$dt || !$name || !$phone) {
-        $error = '❌ Заповніть усі поля і виберіть хоча б один стіл.';
+        $error = 'Заповніть усі поля і виберіть хоча б один стіл.';
     } else {
         $stmt = $conn->prepare("
             INSERT INTO reservations (user_id, table_number, location, reservation_datetime, client_name, client_phone)
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
         }
         $stmt->close();
-        $success = '✅ Ваші столи №' . implode(',', $tables) . " заброньовані на {$dt}.";
+        $success = 'Ваші столи №' . implode(',', $tables) . " заброньовані на {$dt}.";
     }
 }
 ?>

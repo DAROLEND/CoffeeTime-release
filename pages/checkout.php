@@ -11,7 +11,8 @@ $allowedTables = [
     'fast_food_items',
     'pizza_items',
     'cold_drink_items',
-    'dessert_items'
+    'dessert_items',
+    'giftcards'
 ];
 
 if (empty($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
@@ -28,10 +29,17 @@ $total = 0.0;
 foreach ($cart as $ci) {
     $table = $ci['category'];
     $id    = (int)$ci['id'];
-    $stmt  = $conn->prepare("SELECT id, name, image, price FROM `$table` WHERE id = ?");
+
+    if ($table === 'giftcards') {
+        $stmt = $conn->prepare("SELECT id, title AS name, image, price FROM `$table` WHERE id = ?");
+    } else {
+        $stmt = $conn->prepare("SELECT id, name, image, price FROM `$table` WHERE id = ?");
+    }
+
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $res = $stmt->get_result();
+
     if ($row = $res->fetch_assoc()) {
         $row['quantity'] = $ci['quantity'];
         $row['category'] = $ci['category'];
@@ -39,8 +47,10 @@ foreach ($cart as $ci) {
         $total += $row['subtotal'];
         $orderDetails[] = $row;
     }
+
     $stmt->close();
 }
+
 
 $firstName = $_POST['first_name'] ?? ($user['client_name'] ?? '');
 $lastName  = $_POST['last_name']  ?? ($user['client_surname'] ?? '');
@@ -52,7 +62,7 @@ $payment   = $_POST['payment']    ?? '';
 $successMessage = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$firstName || !$lastName || !$phone || !$readyTime || !$payment) {
-        $successMessage = "❌ Будь ласка, заповніть усі обов’язкові поля.";
+        $successMessage = "Будь ласка, заповніть усі обов’язкові поля.";
     } else {
         $day = (int)date('w');
         list($h, $m) = explode(':', $readyTime);
@@ -62,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $max = 20 * 60;
 
         if ($minutes < $min || $minutes > $max) {
-            $successMessage = "❌ Ми працюємо:\nПн–Пт 08:00–20:00,\nСб 10:00–20:00,\nНд 12:00–20:00.\nОберіть інший час.";
+            $successMessage = "Ми працюємо:\nПн–Пт 08:00–20:00,\nСб 10:00–20:00,\nНд 12:00–20:00.\nОберіть інший час.";
         } else {
             $userIdParam = $user['client_id'] ?? 0;
             $sql = "
@@ -94,28 +104,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $price     = (float)$item['price'];
                     $table     = $item['category'];
 
-                    // Запис у order_items
+                    $category = $item['category'];
                     $stmt2 = $conn->prepare("
-                        INSERT INTO order_items (order_id, product_id, quantity, price)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO order_items (order_id, product_id, category, quantity, price)
+                        VALUES (?, ?, ?, ?, ?)
                     ");
-                    $stmt2->bind_param('iiid', $orderId, $productId, $quantity, $price);
+
+                    $stmt2->bind_param('iisid', $orderId, $productId, $category, $quantity, $price);
                     $stmt2->execute();
                     $stmt2->close();
 
-                    // Оновлення popularity
-                    if (in_array($table, $allowedTables, true)) {
+                    if ($table !== 'giftcards') {
                         $updatePop = $conn->prepare("UPDATE `$table` SET popularity = popularity + ? WHERE id = ?");
                         $updatePop->bind_param('ii', $quantity, $productId);
                         $updatePop->execute();
                         $updatePop->close();
                     }
+
                 }
 
                 unset($_SESSION['cart']);
-                $successMessage = "✅ Ваше замовлення успішно оформлено!";
+                $successMessage = "Ваше замовлення успішно оформлено!";
             } else {
-                $successMessage = "❌ Помилка при оформленні: " . $stmt->error;
+                $successMessage = "Помилка при оформленні: " . $stmt->error;
                 $stmt->close();
             }
         }
@@ -160,14 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              value="<?= htmlspecialchars($phone, ENT_QUOTES) ?>" required>
 
       <label for="ready_time">Година готовності *</label>
-      <input
-        type="time"
-        id="ready_time"
-        name="ready_time"
-        value="<?= htmlspecialchars($readyTime) ?>"
-        step="1800"
-        required
-      >
+      <input type="time" id="ready_time" name="ready_time"
+             value="<?= htmlspecialchars($readyTime) ?>" step="1800" required>
       <small class="hint">або введіть вручну у форматі HH:MM</small>
 
       <label for="comment">Коментар</label>
@@ -188,20 +193,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <ul class="order-list">
           <?php foreach($orderDetails as $it): ?>
             <li>
-              <img src="../<?= htmlspecialchars($it['image'],ENT_QUOTES) ?>"
-                   alt="<?= htmlspecialchars($it['name'],ENT_QUOTES) ?>">
+              <img src="../<?= htmlspecialchars($it['image'], ENT_QUOTES) ?>"
+                   alt="<?= htmlspecialchars($it['name'], ENT_QUOTES) ?>">
               <div>
-                <span><?= htmlspecialchars($it['name'],ENT_QUOTES) ?> × <?= $it['quantity'] ?> шт.</span>
+                <span><?= htmlspecialchars($it['name'], ENT_QUOTES) ?> × <?= $it['quantity'] ?> шт.</span>
                 <span>
-                  <?= number_format($it['price'],2,',',' ') ?> ₴ × <?= $it['quantity'] ?> =
-                  <strong><?= number_format($it['subtotal'],2,',',' ') ?> ₴</strong>
+                  <?= number_format($it['price'], 2, ',', ' ') ?> ₴ × <?= $it['quantity'] ?> =
+                  <strong><?= number_format($it['subtotal'], 2, ',', ' ') ?> ₴</strong>
                 </span>
               </div>
             </li>
           <?php endforeach; ?>
         </ul>
         <p class="order-total">
-          <strong>Загальна сума: <?= number_format($total,2,',',' ') ?> ₴</strong>
+          <strong>Загальна сума: <?= number_format($total, 2, ',', ' ') ?> ₴</strong>
         </p>
       </div>
 

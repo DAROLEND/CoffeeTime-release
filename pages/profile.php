@@ -31,9 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['user']['client_surname']     = $lastName;
         $_SESSION['user']['client_PhoneNumber'] = $phone;
         $user = $_SESSION['user'];
-        $successMessage = "✅ Дані успішно оновлено!";
+        $successMessage = "Дані успішно оновлено!";
     } else {
-        $successMessage = "❌ Помилка: " . $stmt->error;
+        $successMessage = "Помилка: " . $stmt->error;
     }
     $stmt->close();
 }

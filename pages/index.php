@@ -13,7 +13,7 @@ $heroSlides = [
 
 // Слайдери: їжа, напої, десерти
 $sliders = [
-  'Популярна їжа' => [
+  'Краща їжа' => [
     'tables' => ['fast_food_items', 'pizza_items', 'dessert_items'],
     'css' => 'food-item'
   ],
@@ -21,7 +21,7 @@ $sliders = [
     'tables' => ['cold_drink_items', 'coffee_items'],
     'css' => 'drink-item'
   ],
-  'Очікувані десерти' => [
+  'Наші десерти' => [
     'tables' => ['dessert_items'],
     'css' => 'dessert-item'
   ]

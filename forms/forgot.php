@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
 
             // Відправка листа з посиланням на скидання пароля
-            $resetLink = "http://localhost/Project/forms/reset.php?token=$token";
+            $resetLink = "http://localhost/CoffeeTime-release/forms/reset.php?token=$token";
 
             $mail = new PHPMailer(true);
 

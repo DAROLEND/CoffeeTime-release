@@ -1,33 +1,30 @@
 <?php
 session_start();
-
-$page      = 'gallery';
+$page = 'gallery';
 $pageTitle = 'Галерея — Coffee Time';
+$customStyles = [
+  '../static/css/gallery.css'
+];
+include '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><?= htmlspecialchars($pageTitle) ?></title>
-  <link rel="stylesheet" href="../static/css/style.css">
-  <link rel="stylesheet" href="../static/css/footer.css">
-</head>
-<body>
-  <?php include '../includes/header.php'; ?>
 
-  <main class="page-content">
-    <h1>Галерея</h1>
-    <div class="expand-grid">
-      <img src="../static/images/gallery/1.jpg" alt="Інтер'єр кафе">
-      <img src="../static/images/gallery/2.jpg" alt="Атмосфера на терасі">
-      <img src="../static/images/gallery/3.jpg" alt="Кавові зерна">
-      <img src="../static/images/gallery/4.jpg" alt="Бариста за роботою">
-      <img src="../static/images/gallery/5.jpg" alt="Десерти на вітрині">
-      <img src="../static/images/gallery/6.jpg" alt="Гості в кафе">
-    </div>
-  </main>
+<main class="page-content">
+  <h1 style="text-align: center;">Галерея</h1>
 
-  <?php include '../includes/footer.php'; ?>
+  <div class="gallery-grid" id="gallery">
+    <div class="grid-sizer"></div>
+    <?php for ($i = 1; $i <= 10; $i++): ?>
+      <div class="gallery-item">
+        <img src="../static/images/gallery/photo<?= $i ?>.png" alt="Фото <?= $i ?>">
+      </div>
+    <?php endfor; ?>
+  </div>
+</main>
+
+<?php include '../includes/footer.php'; ?>
+
+<script src="https://unpkg.com/imagesloaded@4/imagesloaded.pkgd.min.js"></script>
+<script src="https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js"></script>
+<script src="../static/js/gallery.js"></script>
 </body>
 </html>

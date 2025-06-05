@@ -21,9 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirmPassword = $_POST['confirm_password'] ?? '';
 
     if (!$currentPassword || !$newPassword || !$confirmPassword) {
-        $errorMessage = "❌ Заповніть усі поля.";
+        $errorMessage = "Заповніть усі поля.";
     } elseif ($newPassword !== $confirmPassword) {
-        $errorMessage = "❌ Нові паролі не збігаються.";
+        $errorMessage = "Нові паролі не збігаються.";
     } else {
         // Отримання хеш паролю з БД
         $stmt = $conn->prepare("SELECT password FROM users WHERE client_id = ?");
@@ -38,16 +38,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $conn->prepare("UPDATE users SET password = ? WHERE client_id = ?");
                 $stmt->bind_param("si", $newHashedPassword, $user['client_id']);
                 if ($stmt->execute()) {
-                    $successMessage = "✅ Пароль успішно змінено.";
+                    $successMessage = "Пароль успішно змінено.";
                 } else {
-                    $errorMessage = "❌ Помилка при оновленні паролю: " . $stmt->error;
+                    $errorMessage = "Помилка при оновленні паролю: " . $stmt->error;
                 }
                 $stmt->close();
             } else {
-                $errorMessage = "❌ Неправильний поточний пароль.";
+                $errorMessage = "Неправильний поточний пароль.";
             }
         } else {
-            $errorMessage = "❌ Користувача не знайдено.";
+            $errorMessage = "Користувача не знайдено.";
         }
     }
 }

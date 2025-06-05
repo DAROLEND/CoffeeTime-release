@@ -20,7 +20,6 @@ switch ($sort) {
         break;
 }
 
-// ==== Збереження локального відгуку ====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'], $_POST['text'], $_POST['rating'])) {
     $name = trim($_POST['name']);
     $text = trim($_POST['text']);
@@ -36,19 +35,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['name'], $_POST['text'
     }
 }
 
-// ==== Отримання Google-відгуків ====
-$apiKey = 'AIzaSyBGJuxpOPG4gdBn4BF3hBdXiLiHsa7nAJs';
+$apiKey = 'AIzaSyDDB66HGrvnniUuC2QpR83BTmQ99ssDqFk';
 $placeId = 'ChIJpSEn64eEMUcR5GJBQPZZnpg';
+$googleReviews = [];
 
 $curl = curl_init();
 curl_setopt_array($curl, [
-    CURLOPT_URL => "https://places.googleapis.com/v1/places/$placeId?fields=reviews&key=$apiKey",
+    CURLOPT_URL => "https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=name,rating,reviews&language=uk&key=$apiKey",
     CURLOPT_RETURNTRANSFER => true
 ]);
 $response = curl_exec($curl);
 curl_close($curl);
+
 $googleData = json_decode($response, true);
-$googleReviews = $googleData['reviews'] ?? [];
+$googleReviews = $googleData['result']['reviews'] ?? [];
+
+
 
 usort($googleReviews, function($a, $b) use ($sort) {
     $ra = $a['rating'] ?? 0;
@@ -57,20 +59,14 @@ usort($googleReviews, function($a, $b) use ($sort) {
     $db = strtotime($b['publishTime'] ?? '2000-01-01');
 
     switch ($sort) {
-        case 'worst':
-            return $ra <=> $rb;
-        case 'newest':
-            return $db <=> $da;
-        case 'oldest':
-            return $da <=> $db;
+        case 'worst': return $ra <=> $rb;
+        case 'newest': return $db <=> $da;
+        case 'oldest': return $da <=> $db;
         case 'best':
-        default:
-            return $rb <=> $ra;
+        default: return $rb <=> $ra;
     }
 });
 
-
-// ==== Отримання локальних відгуків ====
 $siteReviews = [];
 $res = $conn->query("SELECT name, text, rating, created_at FROM site_reviews $orderClause");
 while ($row = $res->fetch_assoc()) {
@@ -92,14 +88,21 @@ while ($row = $res->fetch_assoc()) {
 
 <main class="page-content">
   <h1 style="text-align: center">Відгуки наших клієнтів</h1>
+  <div class="top-controls">
+    <div class="sort-wrapper">
+      <button class="sort-button">Сортувати ▾</button>
+      <div id="sortDropdown" class="sort-dropdown">
+        <a href="?sort=best">Спочатку кращі</a>
+        <a href="?sort=worst">Спочатку гірші</a>
+        <a href="?sort=newest">Спочатку новіші</a>
+        <a href="?sort=oldest">Спочатку давніші</a>
+      </div>
+    </div>
 
-  <div style="text-align: center; margin-bottom: 1rem; position: relative;">
-    <button onclick="toggleSortDropdown()" class="sort-button">Сортувати ▾</button>
-    <div id="sortDropdown" class="sort-dropdown">
-      <a href="reviews.php?sort=best">Спочатку кращі</a>
-      <a href="reviews.php?sort=worst">Спочатку гірші</a>
-      <a href="reviews.php?sort=newest">Спочатку новіші</a>
-      <a href="reviews.php?sort=oldest">Спочатку давніші</a>
+    <div class="google-link">
+      <a href="https://www.google.com/maps/place/?q=place_id:<?= urlencode($placeId) ?>" target="_blank">
+        Більше відгуків на Google Maps
+      </a>
     </div>
   </div>
 
@@ -107,9 +110,9 @@ while ($row = $res->fetch_assoc()) {
     <?php foreach ($googleReviews as $review): ?>
       <div class="testimonial-item">
         <div class="testimonial-author">
-          <?= htmlspecialchars($review['authorAttribution']['displayName'] ?? 'Aнонім') ?>
+          <?= htmlspecialchars($review['author_name'] ?? 'Анонім') ?>
           <span style="display:block; font-size: 0.8rem; color: #888;">
-            <?= isset($review['publishTime']) ? date('d.m.Y', strtotime($review['publishTime'])) : '' ?> — взято з Google Maps
+            <?= isset($review['time']) ? date('d.m.Y', $review['time']) : '' ?> — взято з Google Maps
           </span>
           <div class="stars-static">
             <?php for ($i = 1; $i <= 5; $i++): ?>
@@ -117,9 +120,10 @@ while ($row = $res->fetch_assoc()) {
             <?php endfor; ?>
           </div>
         </div>
-        <p><?= htmlspecialchars($review['originalText']['text'] ?? 'Невідомий відгук') ?></p>
+        <p><?= htmlspecialchars($review['text'] ?? 'Немає тексту') ?></p>
       </div>
     <?php endforeach; ?>
+
 
     <?php foreach ($siteReviews as $r): ?>
       <div class="testimonial-item">
@@ -144,17 +148,17 @@ while ($row = $res->fetch_assoc()) {
       <div class="form-group rating-full-row">
         <label>Оцінка:</label>
         <div class="stars" id="starRating">
-          <span data-value="1">&#9734;</span>
-          <span data-value="2">&#9734;</span>
-          <span data-value="3">&#9734;</span>
-          <span data-value="4">&#9734;</span>
-          <span data-value="5">&#9734;</span>
+          <span data-value="1">☆</span>
+          <span data-value="2">☆</span>
+          <span data-value="3">☆</span>
+          <span data-value="4">☆</span>
+          <span data-value="5">☆</span>
         </div>
         <input type="hidden" name="rating" id="ratingInput" value="0" required>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label for="name">Ваше ім’я:</label>
+          <label for="name">Ваше ім'я:</label>
           <input type="text" name="name" id="name" required>
         </div>
         <div class="form-group flex-grow">

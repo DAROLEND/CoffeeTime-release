@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ");
         $stmt->bind_param('sss', $email, $login, $hash);
         if ($stmt->execute()) {
-            $success = '🎉 Ви успішно зареєстровані! <a href="login.php" class="auth-link">Увійти</a>';
+            $success = 'Ви успішно зареєстровані! <a href="login.php" class="auth-link">Увійти</a>';
         } else {
             $errors[] = 'Помилка під час реєстрації: ' . $stmt->error;
         }
