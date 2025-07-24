@@ -1,8 +1,8 @@
-# Базовий образ PHP з Apache
 FROM php:8.2-apache
 
-# Копіюємо всі файли проєкту в кореневу директорію веб-сервера
+RUN apt-get update && apt-get install -y unzip git curl \
+    && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
 COPY . /var/www/html/
 
-# Відкриваємо порт 80 (той, який слухає Apache)
 EXPOSE 80
