@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where mysql)",
+      "Read(//c/xampp/**)",
+      "Bash(/c/xampp/mysql/bin/mysql -u root CoffeeTime -e \"SELECT id, name, image FROM coffee_items;\")",
+      "Bash(/c/xampp/mysql/bin/mysql -u root --host=127.0.0.1 --port=3306 CoffeeTime -e \"SELECT id, name, image FROM coffee_items;\")"
+    ],
+    "additionalDirectories": [
+      "I:\\CoffeeTime-release\\coffeetime-next\\app\\admin\\items\\[id]"
+    ]
+  }
+}
