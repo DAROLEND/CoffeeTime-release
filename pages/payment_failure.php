@@ -1,0 +1,123 @@
+<?php
+session_start();
+require_once __DIR__ . '/../db/db.php';
+
+$orderId = (int)($_SESSION['pending_order_id'] ?? 0);
+?>
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Оплату не завершено — Coffee Time</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../static/css/style.css">
+  <link rel="stylesheet" href="../static/css/footer.css">
+  <link rel="stylesheet" href="../static/css/animations.css">
+  <style>
+    .fail-page-wrap {
+      max-width: 520px;
+      margin: 48px auto 80px;
+      padding: 0 20px;
+    }
+    .fail-card {
+      background: #fff;
+      border-radius: 20px;
+      border: 1px solid #f0e8df;
+      padding: 52px 40px 44px;
+      box-shadow: 0 4px 28px rgba(139,69,19,0.08);
+      text-align: center;
+    }
+    /* X icon */
+    .fail-icon {
+      width: 88px; height: 88px;
+      background: #fff3f3;
+      border: 3px solid #ef5350;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 28px;
+      font-size: 36px;
+      line-height: 1;
+      animation: failPop .5s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    @keyframes failPop {
+      from { opacity: 0; transform: scale(.5); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .fail-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.8rem;
+      color: #2c1810;
+      margin: 0 0 12px;
+    }
+    .fail-sub {
+      font-size: 15px;
+      color: #888;
+      line-height: 1.6;
+      margin: 0 0 32px;
+    }
+    .fail-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .fail-btn-primary {
+      padding: 13px 30px;
+      background: #FFC107;
+      color: #5a2d00;
+      border-radius: 50px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(255,193,7,0.35);
+      transition: background .2s, transform .2s;
+    }
+    .fail-btn-primary:hover { background: #e6ac00; transform: translateY(-1px); }
+    .fail-btn-outline {
+      padding: 13px 30px;
+      border: 1.5px solid #d4a96a;
+      color: #8B4513;
+      border-radius: 50px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background .2s;
+    }
+    .fail-btn-outline:hover { background: #fdf6ee; }
+  </style>
+  <script defer src="../static/js/animations.js"></script>
+</head>
+<body>
+<?php include '../includes/header.php'; ?>
+
+<main class="fail-page-wrap">
+  <div class="fail-card">
+
+    <div class="fail-icon">✕</div>
+
+    <h2 class="fail-title">Оплату не завершено</h2>
+    <p class="fail-sub">
+      На жаль, платіж не пройшов або був скасований.<br>
+      Спробуйте ще раз або оберіть оплату готівкою при отриманні.
+    </p>
+
+    <div class="fail-actions">
+      <?php if ($orderId): ?>
+        <a href="../liqpay_checkout.php" class="fail-btn-primary">
+          Спробувати ще раз
+        </a>
+      <?php endif; ?>
+      <a href="checkout.php" class="fail-btn-outline">
+        Повернутись до оформлення
+      </a>
+    </div>
+
+  </div>
+</main>
+
+<?php include '../includes/footer.php'; ?>
+</body>
+</html>

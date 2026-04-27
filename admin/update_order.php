@@ -1,15 +1,6 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-session_start();
-
-if (!isset($_SESSION['admin'])) {
-    header('Location: login.php');
-    exit;
-}
-
-require '../db/db.php';
+require_once __DIR__ . '/../db/db.php';
+require_once __DIR__ . '/auth_check.php';
 
 if (!isset($_GET['id'], $_GET['status']) || !is_numeric($_GET['id'])) {
     echo "Невірні параметри.";

@@ -1,9 +1,7 @@
 <?php
 // forms/forgot.php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-session_start();
+require_once __DIR__ . '/../includes/session.php';
+require_once __DIR__ . '/../includes/error_handler.php';
 require_once __DIR__ . '/../db/db.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -38,21 +36,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
 
             // Відправка листа з посиланням на скидання пароля
-            $resetLink = "http://localhost/CoffeeTime-release/forms/reset.php?token=$token";
+            $baseUrl   = rtrim(getenv('APP_URL') ?: 'http://localhost/CoffeeTime-release', '/');
+            $resetLink = $baseUrl . '/forms/reset.php?token=' . urlencode($token);
 
             $mail = new PHPMailer(true);
 
             try {
                 $mail->isSMTP();
-                $mail->Host = 'smtp.gmail.com';
-                $mail->SMTPAuth = true;
-                $mail->Username = 'slabitskyia@gmail.com';
-                $mail->Password = 'hlwd rzpb zfzp qgtp';
+                $mail->Host       = getenv('MAIL_HOST')     ?: 'smtp.gmail.com';
+                $mail->SMTPAuth   = true;
+                $mail->Username   = getenv('MAIL_USERNAME') ?: '';
+                $mail->Password   = getenv('MAIL_PASSWORD') ?: '';
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port = 587;
+                $mail->Port       = (int)(getenv('MAIL_PORT') ?: 587);
 
-
-                $mail->setFrom('slabitskyia@gmail.com', 'Coffee Time');
+                $mail->setFrom(
+                    getenv('MAIL_FROM')      ?: getenv('MAIL_USERNAME') ?: '',
+                    getenv('MAIL_FROM_NAME') ?: 'Coffee Time'
+                );
                 $mail->addAddress($email);
                 $mail->CharSet = 'UTF-8';
                 $mail->Subject = 'Відновлення пароля — Coffee Time';

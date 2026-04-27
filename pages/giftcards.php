@@ -1,4 +1,6 @@
 <?php
+/* СЕРТИФІКАТИ — тимчасово приховано
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -21,39 +23,28 @@ if ($result && mysqli_num_rows($result) > 0) {
         $giftcards[] = $row;
     }
 }
+*/
 ?>
+<?php /* СЕРТИФІКАТИ — сторінка тимчасово відключена */ ?>
 <!DOCTYPE html>
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><?= htmlspecialchars($pageTitle) ?></title>
+  <title>Coffee Time</title>
   <link rel="stylesheet" href="../static/css/style.css">
   <link rel="stylesheet" href="../static/css/footer.css">
 </head>
 <body>
-  <?php require '../includes/header.php'; ?>
-
-  <main class="page-content">
-    <h1 class = "maintext-gift ">Подарункові сертифікати</h1>
-
-    <div class="gift-grid">
-      <?php foreach ($giftcards as $card): ?>
-        <?php
-          $url = "/CoffeeTime-release/pages/cart.php?action=add&category=giftcards&id=" . (int)$card['id'];
-        ?>
-        <div class="gift-item">
-          <img src="../<?= htmlspecialchars($card['image']) ?>" alt="Coffee Time">
-          <div class="card-content">
-            <h3><?= htmlspecialchars($card['title']) ?></h3>
-            <p><?= (int)$card['price'] ?> ₴</p>
-            <a href="<?= $url ?>" class="gift-btn">Купити</a>
-          </div>
-        </div>
-      <?php endforeach; ?>
-    </div>
+  <?php
+  session_start();
+  $page = 'giftcards';
+  require '../includes/header.php';
+  ?>
+  <main class="page-content" style="text-align:center; padding: 60px 20px;">
+    <h1>Сторінка тимчасово недоступна</h1>
+    <p><a href="index.php">Повернутися на головну</a></p>
   </main>
-
   <?php require '../includes/footer.php'; ?>
 </body>
 </html>

@@ -1,0 +1,7 @@
+Options -Indexes
+
+# Block direct access to auth_check.php (it's an include, not a page)
+<Files "auth_check.php">
+    Order Allow,Deny
+    Deny from all
+</Files>

@@ -1,13 +1,6 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-session_start();
-if (!isset($_SESSION['admin'])) {
-    header('Location: login.php');
-    exit;
-}
-require '../db/db.php';
+require_once __DIR__ . '/../db/db.php';
+require_once __DIR__ . '/auth_check.php';
 
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     echo "Невірний ID замовлення.";
@@ -47,7 +40,7 @@ while ($row = $result->fetch_assoc()) {
     $name = '—';
 
     // Якщо звичайна таблиця з полем name
-    if (in_array($table, ['coffee_items', 'pizza_items', 'fast_food_items', 'cold_drink_items', 'dessert_items'])) {
+    if (in_array($table, ['coffee_items', 'pizza_items', 'fast_food_items', 'cold_drink_items', 'dessert_items', 'sushi_items', 'sushi_sets', 'salad_items', 'cake_items'])) {
         $nameStmt = $conn->prepare("SELECT name FROM `$table` WHERE id = ?");
     }
     // Якщо це giftcards — витягуємо title
