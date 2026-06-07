@@ -27,7 +27,7 @@ CREATE TABLE `admin_users` (
   `username` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('super','staff') NOT NULL DEFAULT 'staff',
-  `permissions` text NOT NULL DEFAULT '[]',
+  `permissions` text NOT NULL,
   `display_name` varchar(100) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
@@ -60,7 +60,7 @@ CREATE TABLE `cake_items` (
   `min_weight` decimal(4,1) NOT NULL DEFAULT 1.0,
   `is_custom_order` tinyint(1) NOT NULL DEFAULT 1,
   `popularity` int(11) NOT NULL DEFAULT 0,
-  `price` decimal(10,2) GENERATED ALWAYS AS (`price_per_kg`) STORED,
+  `price` decimal(10,2) NOT NULL DEFAULT 1000.00,
   PRIMARY KEY (`id`),
   KEY `popularity` (`popularity`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
