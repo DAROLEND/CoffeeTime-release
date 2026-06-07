@@ -12,8 +12,9 @@ RUN docker-php-ext-configure gd --with-jpeg --with-webp \
  && docker-php-ext-install -j$(nproc) \
         mysqli pdo pdo_mysql mbstring gd zip curl intl
 
-# Allow .htaccess overrides
-RUN a2enmod rewrite \
+# Allow .htaccess overrides, fix MPM conflict
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
+ && a2enmod mpm_prefork rewrite \
  && sed -i 's|AllowOverride None|AllowOverride All|g' /etc/apache2/apache2.conf
 
 COPY . /var/www/html/
