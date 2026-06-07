@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../db/db.php';
+require_once __DIR__ . '/../includes/storage.php';
 require_once __DIR__ . '/auth_check.php';
 require_perm('products');
 
