@@ -42,7 +42,7 @@ $sql = "
     WHERE 1=1 $where
     GROUP BY oi.product_id, oi.category
     ORDER BY total_qty DESC
-    LIMIT 5
+    LIMIT 20
 ";
 
 $stmt = $conn->prepare($sql);
@@ -68,27 +68,23 @@ foreach ($rows as $row) {
     $prod = $s->get_result()->fetch_assoc();
     $s->close();
 
-    if ($prod) {
-        $rawImg    = $prod['image'] ?? '';
-        $isDefault = (empty($rawImg) || $rawImg === 'static/images/menu_items/default.jpg');
-        $name      = $prod['nm'];
-        $image     = $isDefault ? '' : $rawImg;
-        $unitPrice = number_format((float)$prod['price'], 0, '.', ' ');
-    } else {
-        $name      = 'Видалений товар';
-        $image     = '';
-        $unitPrice = number_format((float)$row['avg_unit_price'], 0, '.', ' ');
-    }
+    if (!$prod) continue; // skip deleted products
+
+    $rawImg    = $prod['image'] ?? '';
+    $isDefault = (empty($rawImg) || $rawImg === 'static/images/menu_items/default.jpg');
+    $image     = $isDefault ? '' : $rawImg;
 
     $products[] = [
-        'name'             => $name,
+        'name'             => $prod['nm'],
         'image'            => $image,
-        'unit_price'       => $unitPrice,
+        'unit_price'       => number_format((float)$prod['price'], 0, '.', ' '),
         'total_qty'        => (int)$row['total_qty'],
         'orders_count'     => (int)$row['orders_count'],
         'total_revenue_fmt'=> number_format((float)$row['total_revenue'], 0, '.', ' '),
-        'deleted'          => !$prod,
+        'deleted'          => false,
     ];
+
+    if (count($products) >= 5) break;
 }
 
 echo json_encode(['success' => true, 'products' => $products]);

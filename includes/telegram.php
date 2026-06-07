@@ -24,15 +24,22 @@ function send_telegram(string $message, string $parseMode = 'HTML'): mixed {
         CURLOPT_CONNECTTIMEOUT => 3,
     ]);
 
-    $result = curl_exec($ch);
-    $err    = curl_errno($ch);
+    $result  = curl_exec($ch);
+    $err     = curl_errno($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
     if ($err) {
         error_log('[Telegram] curl error ' . $err);
         return false;
     }
 
-    return json_decode($result, true);
+    $decoded = json_decode($result, true);
+    if (empty($decoded['ok'])) {
+        error_log('[Telegram] API error HTTP=' . $httpCode . ' resp=' . $result);
+        return false;
+    }
+
+    return $decoded;
 }
 }
 
