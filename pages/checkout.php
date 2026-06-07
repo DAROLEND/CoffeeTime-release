@@ -912,55 +912,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }, {passive: true});
     }
 
-    let _vel = 0, _pos = 0, _physRunning = false;
+    let _wheelAcc = 0, _wheelTimer;
     drum.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (_lock || _rebuilding > 0) return;
 
-      _vel += e.deltaY * 0.22;
-      const cap = ITEM_H * 2;
-      if (_vel >  cap) _vel =  cap;
-      if (_vel < -cap) _vel = -cap;
-
-      if (_physRunning) return;
-      _physRunning = true;
-      _pos = drum.scrollTop;
-      drum.style.scrollSnapType = 'none';
       /* скасовуємо будь-яку кнопкову анімацію */
       const prev = _drumRaf.get(drum);
       if (prev) { cancelAnimationFrame(prev); _drumRaf.delete(drum); }
 
-      (function tick() {
-        const count  = drum.querySelectorAll('.dt-drum-item').length;
-        const maxPos = Math.max(0, count - 1) * ITEM_H;
+      _wheelAcc += e.deltaY;
 
-        _pos += _vel;
-        _vel *= 0.84;
-
-        /* відбій від країв */
-        if (_pos <= 0)      { _pos = 0;      if (_vel < 0) _vel = 0; }
-        if (_pos >= maxPos) { _pos = maxPos; if (_vel > 0) _vel = 0; }
-
-        drum.scrollTop = _pos;
-
-        if (Math.abs(_vel) < 0.6) {
-          /* пружний snap до найближчого елемента */
-          const snapIdx = Math.max(0, Math.min(Math.round(_pos / ITEM_H), count - 1));
-          const snapPos = snapIdx * ITEM_H;
-          const diff    = snapPos - _pos;
-          _vel += diff * 0.28;
-
-          if (Math.abs(diff) < 0.4 && Math.abs(_vel) < 0.4) {
-            drum.scrollTop  = snapPos;
-            drum.style.scrollSnapType = '';
-            _pos = snapPos; _vel = 0; _physRunning = false;
-            fire();
-            return;
-          }
-        }
-
-        requestAnimationFrame(tick);
-      })();
+      clearTimeout(_wheelTimer);
+      _wheelTimer = setTimeout(() => {
+        const count = drum.querySelectorAll('.dt-drum-item').length;
+        if (!count) return;
+        const curIdx = Math.max(0, Math.min(Math.round(drum.scrollTop / ITEM_H), count - 1));
+        const step   = _wheelAcc > 0 ? 1 : -1;
+        const newIdx = Math.max(0, Math.min(curIdx + step, count - 1));
+        _wheelAcc = 0;
+        if (newIdx === curIdx) { fire(); return; }
+        drum.scrollTo({ top: newIdx * ITEM_H, behavior: 'smooth' });
+        /* fire спрацює через scrollend / scroll+timeout */
+      }, 30);
     }, { passive: false });
   }
 
