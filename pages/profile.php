@@ -647,6 +647,16 @@ if (toast) {
   setTimeout(function () { toast.remove(); }, 3700);
 }
 
+// Strip entry animations after they complete — prevents re-trigger on tab switch
+(function () {
+  var once = function (el) {
+    if (!el) return;
+    el.addEventListener('animationend', function () { el.style.animation = 'none'; }, { once: true });
+  };
+  once(document.querySelector('.prof-sidebar'));
+  once(document.querySelector('.prof-main'));
+})();
+
 function switchTab(target) {
   document.querySelectorAll('.prof-tab').forEach(function (t) {
     t.classList.toggle('active', t.dataset.tab === target);
@@ -696,6 +706,16 @@ var groupEarlier       = document.getElementById('groupEarlier');
 var groupEarlierToggle = document.getElementById('groupEarlierToggle');
 var groupEarlierBody   = document.getElementById('groupEarlierBody');
 if (groupEarlier && groupEarlierToggle && groupEarlierBody) {
+  // Auto-expand if it's the only group with orders
+  var otherGroups = document.querySelectorAll('.orders-grid > .order-group:not(.order-group--collapsible)');
+  var otherHasOrders = false;
+  otherGroups.forEach(function (g) { if (g.querySelectorAll('.order-card').length > 0) otherHasOrders = true; });
+  if (!otherHasOrders) {
+    groupEarlier.classList.add('expanded');
+    groupEarlierBody.style.maxHeight = 'none';
+    groupEarlierBody.querySelectorAll('.order-card').forEach(function (c) { c.classList.add('revealed'); });
+  }
+
   groupEarlierToggle.addEventListener('click', function () {
     var isExpanded = groupEarlier.classList.contains('expanded');
     if (isExpanded) {

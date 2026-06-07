@@ -912,30 +912,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }, {passive: true});
     }
 
-    let _wheelAcc = 0, _wheelTimer;
+    /* ── Wheel: float target px + rAF ease-out, snap on settle ── */
+    let _wTargetPx  = -1;
+    let _wAnimating = false;
+    let _wCurPos    = 0;
+
+    function _wGoTo(targetPx) {
+      const count = drum.querySelectorAll('.dt-drum-item').length;
+      if (!count) return;
+      _wTargetPx = Math.max(0, Math.min(targetPx, (count - 1) * ITEM_H));
+
+      if (_wAnimating) return;
+      _wAnimating = true;
+      _wCurPos    = drum.scrollTop;
+      drum.style.scrollSnapType = 'none';
+
+      (function tick() {
+        const diff = _wTargetPx - _wCurPos;
+
+        if (Math.abs(diff) < 0.5) {
+          /* snap до найближчого елемента */
+          const cnt     = drum.querySelectorAll('.dt-drum-item').length;
+          const snapIdx = Math.max(0, Math.min(Math.round(_wCurPos / ITEM_H), cnt - 1));
+          const snapPx  = snapIdx * ITEM_H;
+          drum.scrollTop = snapPx;
+          drum.style.scrollSnapType = '';
+          _wTargetPx  = snapPx;
+          _wCurPos    = snapPx;
+          _wAnimating = false;
+          fire();
+          return;
+        }
+
+        _wCurPos += diff * 0.25;
+        drum.scrollTop = _wCurPos;
+        _drumRaf.set(drum, requestAnimationFrame(tick));
+      })();
+    }
+
     drum.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (_lock || _rebuilding > 0) return;
+      if (_dragActive) return;
 
-      /* скасовуємо будь-яку кнопкову анімацію */
+      const count = drum.querySelectorAll('.dt-drum-item').length;
+      if (!count) return;
+
+      const basePx = _wAnimating ? _wTargetPx : drum.scrollTop;
+
+      if (Math.abs(e.deltaY) >= 50) {
+        /* миша: рівно ±1 позиція */
+        const baseIdx = Math.round(basePx / ITEM_H);
+        const newIdx  = Math.max(0, Math.min(baseIdx + (e.deltaY > 0 ? 1 : -1), count - 1));
+        _wGoTo(newIdx * ITEM_H);
+      } else {
+        /* тачпад: пропорційний рух */
+        _wGoTo(basePx + e.deltaY * (ITEM_H / 60));
+      }
+    }, { passive: false });
+
+    /* ── Drag: миша і тач ── */
+    let _dragActive = false, _dragStartY = 0, _dragStartScroll = 0, _dragEndAt = 0;
+
+    function _dragStart(clientY) {
+      if (_lock || _rebuilding > 0) return;
       const prev = _drumRaf.get(drum);
       if (prev) { cancelAnimationFrame(prev); _drumRaf.delete(drum); }
+      _wAnimating = false;
+      _dragActive      = true;
+      _dragStartY      = clientY;
+      _dragStartScroll = drum.scrollTop;
+      drum.style.scrollSnapType = 'none';
+      drum.style.cursor = 'grabbing';
+    }
 
-      _wheelAcc += e.deltaY;
+    function _dragMove(clientY) {
+      if (!_dragActive) return;
+      const count  = drum.querySelectorAll('.dt-drum-item').length;
+      const maxPx  = (count - 1) * ITEM_H;
+      const newPos = Math.max(0, Math.min(_dragStartScroll + (_dragStartY - clientY), maxPx));
+      drum.scrollTop = newPos;
+      _wTargetPx = newPos;
+      _wCurPos   = newPos;
+    }
 
-      clearTimeout(_wheelTimer);
-      _wheelTimer = setTimeout(() => {
-        const count = drum.querySelectorAll('.dt-drum-item').length;
-        if (!count) return;
-        const curIdx = Math.max(0, Math.min(Math.round(drum.scrollTop / ITEM_H), count - 1));
-        const step   = _wheelAcc > 0 ? 1 : -1;
-        const newIdx = Math.max(0, Math.min(curIdx + step, count - 1));
-        _wheelAcc = 0;
-        if (newIdx === curIdx) { fire(); return; }
-        drum.scrollTo({ top: newIdx * ITEM_H, behavior: 'smooth' });
-        /* fire спрацює через scrollend / scroll+timeout */
-      }, 30);
-    }, { passive: false });
+    function _dragEnd() {
+      if (!_dragActive) return;
+      _dragActive = false;
+      _dragEndAt  = Date.now();
+      drum.style.cursor = '';
+      _wGoTo(drum.scrollTop);
+    }
+
+    /* Миша */
+    drum.addEventListener('mousedown', (e) => { e.preventDefault(); _dragStart(e.clientY); });
+    document.addEventListener('mousemove', (e) => { _dragMove(e.clientY); });
+    document.addEventListener('mouseup',   ()  => { _dragEnd(); });
+
+    /* Тач */
+    drum.addEventListener('touchstart', (e) => { _dragStart(e.touches[0].clientY); }, { passive: true });
+    drum.addEventListener('touchmove',  (e) => { _dragMove(e.touches[0].clientY); },  { passive: true });
+    drum.addEventListener('touchend',   ()  => { _dragEnd(); },                        { passive: true });
   }
 
   function _finishAsap(ds, h, m, ts) {
