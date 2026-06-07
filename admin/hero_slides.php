@@ -13,7 +13,9 @@ $conn->query("CREATE TABLE IF NOT EXISTS hero_slides (
   active     TINYINT(1) DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-$conn->query("ALTER TABLE hero_slides ADD COLUMN IF NOT EXISTS label VARCHAR(100) NOT NULL DEFAULT '' AFTER image");
+$_chk = $conn->query("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='hero_slides' AND column_name='label'");
+if ($_chk && $_chk->num_rows === 0) { $conn->query("ALTER TABLE hero_slides ADD COLUMN label VARCHAR(100) NOT NULL DEFAULT '' AFTER image"); }
+unset($_chk);
 
 $cnt = (int)$conn->query("SELECT COUNT(*) AS c FROM hero_slides")->fetch_assoc()['c'];
 if ($cnt === 0) {

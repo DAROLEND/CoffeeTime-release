@@ -110,7 +110,9 @@ $conn->query("CREATE TABLE IF NOT EXISTS order_ratings (
     rating TINYINT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_order_user (order_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-$conn->query("ALTER TABLE order_ratings DROP COLUMN IF EXISTS comment");
+$_chk = $conn->query("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='order_ratings' AND column_name='comment'");
+if ($_chk && $_chk->num_rows > 0) { $conn->query("ALTER TABLE order_ratings DROP COLUMN comment"); }
+unset($_chk);
 if ($adminTab === 'order_ratings') {
     $orPage    = max(1, (int)($_GET['p'] ?? 1));
     $orPerPage = 25;

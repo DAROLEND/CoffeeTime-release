@@ -6,8 +6,9 @@ require_perm('products');
 $pageTitle  = 'Соуси';
 $activePage = 'sauces';
 
-$conn->query("ALTER TABLE sauces ADD COLUMN IF NOT EXISTS image VARCHAR(255) NOT NULL DEFAULT ''"
-);
+$_chk = $conn->query("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='sauces' AND column_name='image'");
+if ($_chk && $_chk->num_rows === 0) { $conn->query("ALTER TABLE sauces ADD COLUMN image VARCHAR(255) NOT NULL DEFAULT ''"); }
+unset($_chk);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
     header('Content-Type: application/json');
