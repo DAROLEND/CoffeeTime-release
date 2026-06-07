@@ -9,7 +9,6 @@ $activePage = 'gallery';
 $galleryDir = __DIR__ . '/../static/images/gallery/';
 $galleryWeb = '../static/images/gallery/';
 
-/* ── AJAX: delete ── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
     header('Content-Type: application/json');
     $data   = json_decode(file_get_contents('php://input'), true);
@@ -63,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
     exit;
 }
 
-/* ── Upload ── */
 $errors   = [];
 $uploaded = 0;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['photos'])) {
@@ -96,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['photos'])) {
     if ($uploaded > 0) { header("Location: admin_gallery.php?uploaded=$uploaded"); exit; }
 }
 
-/* ── Load from DB ── */
 $filterCat = trim($_GET['cat'] ?? '');
 $allowed_cats = ['food', 'interior'];
 
@@ -117,7 +114,6 @@ $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $imageFiles[] = $row;
 $stmt->close();
 
-/* ── Counts ── */
 $counts = ['all' => 0, 'food' => 0, 'interior' => 0];
 $r = $conn->query("SELECT category, COUNT(*) AS c FROM gallery GROUP BY category");
 if ($r) while ($row = $r->fetch_assoc()) {
@@ -166,11 +162,11 @@ include 'includes/layout_top.php';
       <div class="guo-cat-btns">
         <label class="guo-cat-btn">
           <input type="radio" name="category" value="food" checked>
-          <span>🍕 Їжа</span>
+          <span>Їжа</span>
         </label>
         <label class="guo-cat-btn">
           <input type="radio" name="category" value="interior">
-          <span>🏠 Інтер'єр</span>
+          <span>Інтер'єр</span>
         </label>
       </div>
     </div>
@@ -211,7 +207,7 @@ include 'includes/layout_top.php';
 
     <!-- Category badge -->
     <div class="gc-badge gc-badge--<?= $img['category'] ?>" id="gbadge-<?= $img['id'] ?>">
-      <?= $img['category'] === 'food' ? '🍕 Їжа' : '🏠 Інтер\'єр' ?>
+      <?= $img['category'] === 'food' ? 'Їжа' : 'Інтер\'єр' ?>
     </div>
 
     <div class="photo-overlay">
@@ -236,7 +232,6 @@ include 'includes/layout_top.php';
 <script>
 var galleryDir = '<?= $galleryWeb ?>';
 
-/* ── Drag & drop + show options ── */
 var dropZone   = document.getElementById('galleryDropZone');
 var fileInput  = document.getElementById('galleryFileInput');
 var uploadOpts = document.getElementById('galleryUploadOptions');
@@ -274,7 +269,6 @@ function showPreviews(files) {
   });
 }
 
-/* ── Toggle category ── */
 function toggleCategory(id, currentCat, btn) {
   var newCat = currentCat === 'food' ? 'interior' : 'food';
   fetch('admin_gallery.php', {
@@ -289,7 +283,7 @@ function toggleCategory(id, currentCat, btn) {
     var badge = document.getElementById('gbadge-' + id);
     if (badge) {
       badge.className = 'gc-badge gc-badge--' + newCat;
-      badge.textContent = newCat === 'food' ? '🍕 Їжа' : '🏠 Інтер\'єр';
+      badge.textContent = newCat === 'food' ? 'Їжа' : 'Інтер\'єр';
     }
     /* Update btn data */
     btn.setAttribute('onclick', "toggleCategory(" + id + ", '" + newCat + "', this)");
@@ -298,7 +292,6 @@ function toggleCategory(id, currentCat, btn) {
   });
 }
 
-/* ── Delete ── */
 function deletePhoto(id, btn) {
   if (!confirm('Видалити це фото?')) return;
   var cell = document.getElementById('gcell-' + id);
@@ -317,7 +310,6 @@ function deletePhoto(id, btn) {
   });
 }
 
-/* ── Lightbox on click ── */
 document.getElementById('galleryGrid') && document.getElementById('galleryGrid').addEventListener('click', function (e) {
   if (e.target.closest('.delete-photo-btn') || e.target.closest('.gc-cat-toggle')) return;
   var cell = e.target.closest('.gallery-cell');

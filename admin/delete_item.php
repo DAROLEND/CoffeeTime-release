@@ -5,7 +5,7 @@ require_once __DIR__ . '/auth_check.php';
 $category = $_GET['category'] ?? '';
 $id = $_GET['id'] ?? '';
 
-$allowed = ['coffee_items', 'fast_food_items', 'pizza_items', 'cold_drink_items', 'dessert_items', 'giftcards', 'sushi_items', 'sushi_sets', 'salad_items', 'cake_items'];
+$allowed = ['coffee_items', 'fast_food_items', 'pizza_items', 'mini_pizza_items', 'cold_drink_items', 'dessert_items', 'sushi_items', 'sushi_sets', 'salad_items', 'cake_items'];
 
 if (!in_array($category, $allowed) || !$id || !is_numeric($id)) {
     echo "Невірний запит.";

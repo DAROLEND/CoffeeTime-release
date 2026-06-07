@@ -3,7 +3,7 @@ session_start();
 require '../db/db.php';
 header('Content-Type: application/json; charset=utf-8');
 
-$allowed = ['coffee_items','fast_food_items','pizza_items','cold_drink_items','dessert_items'];
+$allowed = ['coffee_items','fast_food_items','pizza_items', 'mini_pizza_items','cold_drink_items','dessert_items'];
 $cat     = $_POST['category'] ?? '';
 $itemId  = (int)($_POST['item_id'] ?? 0);
 $action  = $_POST['action'] ?? '';
@@ -36,7 +36,6 @@ $removed = false;
 
 if ($newQty <= 0) {
     unset($_SESSION['cart'][$foundIdx]);
-    $_SESSION['cart'] = array_values($_SESSION['cart']);
     $removed = true;
 }
 

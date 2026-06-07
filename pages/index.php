@@ -4,10 +4,11 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 session_start();
 require '../db/db.php';
+require_once '../includes/helpers.php';
 
 $heroSlides = [];
 try {
-    $_r = $conn->query("SELECT image, title AS text, subtitle AS sub FROM hero_slides WHERE active=1 ORDER BY sort_order ASC, id ASC");
+    $_r = $conn->query("SELECT image, label, title AS text, subtitle AS sub FROM hero_slides WHERE active=1 ORDER BY sort_order ASC, id ASC");
     if ($_r) while ($_row = $_r->fetch_assoc()) $heroSlides[] = $_row;
 } catch (Exception $_e) {}
 /* Fallback if table missing or empty */
@@ -24,7 +25,7 @@ function fetchPopularItems($conn, array $tables, int $limit = 5): array {
   foreach ($tables as $table) {
     $res = $conn->query("SELECT id, name, description, image, popularity, price FROM `$table` ORDER BY popularity DESC LIMIT $limit");
     while ($row = $res->fetch_assoc()) {
-      $row['image'] = '../' . ltrim($row['image'], '/');
+      $row['image'] = item_img($row['image'] ?? '');
       $row['table'] = $table;
       $items[] = $row;
     }
@@ -33,16 +34,17 @@ function fetchPopularItems($conn, array $tables, int $limit = 5): array {
   return array_slice($items, 0, $limit);
 }
 
-function fetchTopOrderedItems(mysqli $conn, array $tables, int $limit = 3): array {
+function fetchTopOrderedItems(mysqli $conn, array $tables, int $limit = 3, int $days = 0): array {
   if (empty($tables)) return [];
   $placeholders = implode(',', array_fill(0, count($tables), '?'));
-  $types  = str_repeat('s', count($tables)) . 'i';
-  $params = array_merge($tables, [$limit]);
+  $dateClause = $days > 0 ? "AND o.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)" : '';
+  $types  = str_repeat('s', count($tables)) . ($days > 0 ? 'ii' : 'i');
+  $params = $days > 0 ? array_merge($tables, [$days, $limit]) : array_merge($tables, [$limit]);
   $stmt   = $conn->prepare(
     "SELECT oi.product_id, oi.category, SUM(oi.quantity) AS total_ordered
      FROM order_items oi
      INNER JOIN orders o ON oi.order_id = o.order_id
-     WHERE oi.category IN ($placeholders)
+     WHERE oi.category IN ($placeholders) $dateClause
      GROUP BY oi.product_id, oi.category
      ORDER BY total_ordered DESC
      LIMIT ?"
@@ -51,17 +53,16 @@ function fetchTopOrderedItems(mysqli $conn, array $tables, int $limit = 3): arra
   $stmt->execute();
   $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   $stmt->close();
-  $items   = [];
-  $default = 'static/images/menu_items/default.jpg';
+  $items = [];
   foreach ($rows as $row) {
-    $s = $conn->prepare("SELECT id, name, description, image, price FROM `{$row['category']}` WHERE id=?");
+    $s = $conn->prepare("SELECT * FROM `{$row['category']}` WHERE id=?");
     $pid = (int)$row['product_id'];
     $s->bind_param('i', $pid);
     $s->execute();
     $prod = $s->get_result()->fetch_assoc();
     $s->close();
     if ($prod) {
-      $prod['image'] = '../' . ltrim($prod['image'] ?: $default, '/');
+      $prod['image'] = item_img($prod['image'] ?? '');
       $prod['table'] = $row['category'];
       $items[] = $prod;
     }
@@ -70,7 +71,7 @@ function fetchTopOrderedItems(mysqli $conn, array $tables, int $limit = 3): arra
 }
 
 $foodItems    = fetchTopOrderedItems($conn, ['fast_food_items', 'pizza_items'], 3);
-$drinkItems   = fetchPopularItems($conn, ['cold_drink_items', 'coffee_items'], 5);
+$drinkItems   = fetchTopOrderedItems($conn, ['cold_drink_items', 'coffee_items'], 5, 7);
 $dessertItems = fetchPopularItems($conn, ['dessert_items'], 3);
 
 // Секція "Про нас" — з БД або дефолт
@@ -87,11 +88,28 @@ try {
     if ($res) while ($row = $res->fetch_assoc()) $aboutSettings[$row['key']] = $row['value'];
 } catch (Exception $_e) {}
 
-// Десерт дня — рандомне фото з БД
+// Десерт дня — текст з site_settings + фото (кастомне або рандомне з БД)
+$dessertBanner = [
+    'label' => 'Щодня нове',
+    'title' => 'Десерт дня',
+    'desc'  => "Мусові торти, еклери та макарони —\nготуємо кожного ранку зі свіжих інгредієнтів",
+    'btn'   => 'Дивитись десерти →',
+    'image' => '',
+];
+try {
+    $res = $conn->query("SELECT `key`, `value` FROM site_settings WHERE `key` LIKE 'dessert_banner_%'");
+    if ($res) while ($row = $res->fetch_assoc()) {
+        $k = str_replace('dessert_banner_', '', $row['key']);
+        $dessertBanner[$k] = $row['value'];
+    }
+} catch (Exception $_e) {}
+
 $dessertBannerImg = null;
-$res = $conn->query("SELECT image FROM dessert_items ORDER BY RAND() LIMIT 1");
-if ($res && $row = $res->fetch_assoc()) {
-  $dessertBannerImg = '../' . ltrim($row['image'], '/');
+if (!empty($dessertBanner['image'])) {
+    $dessertBannerImg = '../' . ltrim($dessertBanner['image'], '/');
+} else {
+    $res = $conn->query("SELECT image FROM dessert_items ORDER BY RAND() LIMIT 1");
+    if ($res && $row = $res->fetch_assoc()) $dessertBannerImg = '../' . ltrim($row['image'], '/');
 }
 
 // Відгуки — тільки з текстом; fallback якщо немає
@@ -142,7 +160,7 @@ include '../includes/header.php';
         <div class="slide<?= $i === 0 ? ' active' : '' ?>"
              style="background-image: url('../<?= htmlspecialchars($s['image']) ?>')">
           <div class="hero-text">
-            <span class="hero-label">Спробуй зараз</span>
+            <?php if (!empty($s['label'])): ?><span class="hero-label"><?= htmlspecialchars($s['label']) ?></span><?php endif; ?>
             <h1><?= htmlspecialchars($s['text']) ?></h1>
             <p class="hero-subtitle"><?= htmlspecialchars($s['sub']) ?></p>
             <a href="../pages/menu.php" class="hero-cta">Переглянути меню →</a>
@@ -171,28 +189,28 @@ include '../includes/header.php';
   <section class="benefits-strip">
     <div class="container">
       <div class="benefit-block">
-        <span class="benefit-icon">☕</span>
+        <?= icon('coffee-cup', 36, '#8B4513', 'benefit-icon') ?>
         <div>
           <p class="benefit-title">Свіжозварена кава</p>
           <p class="benefit-sub">Щоранку нова обсмажка</p>
         </div>
       </div>
       <div class="benefit-block">
-        <span class="benefit-icon">🍰</span>
+        <?= icon('cake', 36, '#8B4513', 'benefit-icon') ?>
         <div>
           <p class="benefit-title">Десерти щодня</p>
           <p class="benefit-sub">Мусові, еклери, макарони</p>
         </div>
       </div>
       <div class="benefit-block">
-        <span class="benefit-icon">🌿</span>
+        <?= icon('leaf', 36, '#8B4513', 'benefit-icon') ?>
         <div>
           <p class="benefit-title">Свіжі інгредієнти</p>
           <p class="benefit-sub">Без консервантів</p>
         </div>
       </div>
       <div class="benefit-block">
-        <span class="benefit-icon">🕗</span>
+        <?= icon('clock', 36, '#8B4513', 'benefit-icon') ?>
         <div>
           <p class="benefit-title">Графік роботи</p>
           <p class="benefit-sub">Пн–Пт 8:00–20:00</p>
@@ -208,12 +226,14 @@ include '../includes/header.php';
       <div class="product-grid">
         <?php foreach ($foodItems as $item): ?>
           <div class="item-card food-item">
-            <span class="card-badge">🔥 Хіт</span>
-            <img
-              src="<?= htmlspecialchars($item['image']) ?>"
-              alt="<?= htmlspecialchars($item['name']) ?>"
-              loading="lazy"
-            >
+            <span class="card-badge"><?= icon('fire', 13, '#e65100') ?> Хіт</span>
+            <?php if ($item['image']): ?>
+            <img src="<?= htmlspecialchars($item['image']) ?>"
+                 alt="<?= htmlspecialchars($item['name']) ?>"
+                 loading="lazy">
+            <?php else: ?>
+            <div class="item-no-img" aria-hidden="true"></div>
+            <?php endif; ?>
             <div class="card-info">
               <p class="card-name"><?= htmlspecialchars($item['name']) ?></p>
               <?php if (!empty($item['description'])): ?>
@@ -221,11 +241,8 @@ include '../includes/header.php';
               <?php endif; ?>
               <div class="card-footer">
                 <span class="card-price"><?= number_format((float)$item['price'], 0) ?> грн</span>
-                <button
-                  class="btn-add-cart"
-                  data-category="<?= htmlspecialchars($item['table']) ?>"
-                  data-id="<?= (int)$item['id'] ?>"
-                >Додати в кошик</button>
+                <a href="menu.php?category=<?= htmlspecialchars($item['table']) ?>&amp;scroll_to=<?= (int)$item['id'] ?>"
+                   class="btn-add-cart">Переглянути в меню →</a>
               </div>
             </div>
           </div>
@@ -237,13 +254,14 @@ include '../includes/header.php';
   <!-- ===== БАНЕР "ДЕСЕРТ ДНЯ" ===== -->
   <section class="dessert-banner">
     <div class="dessert-banner__text">
-      <p class="banner-label">Щодня нове</p>
-      <h2>Десерт дня</h2>
+      <?php if (!empty($dessertBanner['label'])): ?>
+        <p class="banner-label"><?= htmlspecialchars($dessertBanner['label']) ?></p>
+      <?php endif; ?>
+      <h2><?= htmlspecialchars($dessertBanner['title']) ?></h2>
       <p class="dessert-banner__desc">
-        Мусові торти, еклери та макарони —<br>
-        готуємо кожного ранку зі свіжих інгредієнтів
+        <?= nl2br(htmlspecialchars($dessertBanner['desc'])) ?>
       </p>
-      <a href="../pages/menu.php?category=dessert_items" class="banner-btn">Дивитись десерти →</a>
+      <a href="../pages/menu.php?category=dessert_items" class="banner-btn"><?= htmlspecialchars($dessertBanner['btn']) ?></a>
     </div>
     <div class="dessert-banner__photo<?= $dessertBannerImg ? ' has-photo' : '' ?>">
       <?php if ($dessertBannerImg): ?>
@@ -256,16 +274,18 @@ include '../includes/header.php';
   <section class="home-section">
     <div class="container">
       <h2>Обирають найчастіше</h2>
-      <p class="section-subtitle">За кількістю замовлень цього тижня</p>
+      <p class="section-subtitle">Найпопулярніші напої та кава</p>
       <?php if (count($drinkItems) < 4): ?>
         <div class="product-grid">
           <?php foreach ($drinkItems as $item): ?>
             <div class="item-card drink-item">
-              <img
-                src="<?= htmlspecialchars($item['image']) ?>"
-                alt="<?= htmlspecialchars($item['name']) ?>"
-                loading="lazy"
-              >
+              <?php if ($item['image']): ?>
+              <img src="<?= htmlspecialchars($item['image']) ?>"
+                   alt="<?= htmlspecialchars($item['name']) ?>"
+                   loading="lazy">
+              <?php else: ?>
+              <div class="item-no-img" aria-hidden="true"></div>
+              <?php endif; ?>
               <div class="card-info">
                 <p class="card-name"><?= htmlspecialchars($item['name']) ?></p>
                 <?php if (!empty($item['description'])): ?>
@@ -273,11 +293,8 @@ include '../includes/header.php';
                 <?php endif; ?>
                 <div class="card-footer">
                   <span class="card-price"><?= number_format((float)$item['price'], 0) ?> грн</span>
-                  <button
-                    class="btn-add-cart"
-                    data-category="<?= htmlspecialchars($item['table']) ?>"
-                    data-id="<?= (int)$item['id'] ?>"
-                  >Додати в кошик</button>
+                  <a href="menu.php?category=<?= htmlspecialchars($item['table']) ?>&amp;scroll_to=<?= (int)$item['id'] ?>"
+                     class="btn-add-cart">Переглянути в меню →</a>
                 </div>
               </div>
             </div>
@@ -291,11 +308,13 @@ include '../includes/header.php';
             <?php foreach ($drinkItems as $item): ?>
               <div class="slide">
                 <div class="item-card drink-item">
-                  <img
-                    src="<?= htmlspecialchars($item['image']) ?>"
-                    alt="<?= htmlspecialchars($item['name']) ?>"
-                    loading="lazy"
-                  >
+                  <?php if ($item['image']): ?>
+                  <img src="<?= htmlspecialchars($item['image']) ?>"
+                       alt="<?= htmlspecialchars($item['name']) ?>"
+                       loading="lazy">
+                  <?php else: ?>
+                  <div class="item-no-img" aria-hidden="true"></div>
+                  <?php endif; ?>
                   <div class="card-info">
                     <p class="card-name"><?= htmlspecialchars($item['name']) ?></p>
                     <?php if (!empty($item['description'])): ?>
@@ -303,11 +322,8 @@ include '../includes/header.php';
                     <?php endif; ?>
                     <div class="card-footer">
                       <span class="card-price"><?= number_format((float)$item['price'], 0) ?> грн</span>
-                      <button
-                        class="btn-add-cart"
-                        data-category="<?= htmlspecialchars($item['table']) ?>"
-                        data-id="<?= (int)$item['id'] ?>"
-                      >Додати в кошик</button>
+                      <a href="menu.php?category=<?= htmlspecialchars($item['table']) ?>&amp;scroll_to=<?= (int)$item['id'] ?>"
+                         class="btn-add-cart">Переглянути в меню →</a>
                     </div>
                   </div>
                 </div>
@@ -361,11 +377,13 @@ include '../includes/header.php';
       <div class="product-grid">
         <?php foreach ($dessertItems as $item): ?>
           <div class="item-card dessert-item">
-            <img
-              src="<?= htmlspecialchars($item['image']) ?>"
-              alt="<?= htmlspecialchars($item['name']) ?>"
-              loading="lazy"
-            >
+            <?php if ($item['image']): ?>
+            <img src="<?= htmlspecialchars($item['image']) ?>"
+                 alt="<?= htmlspecialchars($item['name']) ?>"
+                 loading="lazy">
+            <?php else: ?>
+            <div class="item-no-img" aria-hidden="true"></div>
+            <?php endif; ?>
             <div class="card-info">
               <p class="card-name"><?= htmlspecialchars($item['name']) ?></p>
               <?php if (!empty($item['description'])): ?>
@@ -373,18 +391,12 @@ include '../includes/header.php';
               <?php endif; ?>
               <div class="card-footer">
                 <span class="card-price"><?= number_format((float)$item['price'], 0) ?> грн</span>
-                <button
-                  class="btn-add-cart"
-                  data-category="<?= htmlspecialchars($item['table']) ?>"
-                  data-id="<?= (int)$item['id'] ?>"
-                >Додати в кошик</button>
+                <a href="menu.php?category=<?= htmlspecialchars($item['table']) ?>&amp;scroll_to=<?= (int)$item['id'] ?>"
+                   class="btn-add-cart">Переглянути в меню →</a>
               </div>
             </div>
           </div>
         <?php endforeach; ?>
-      </div>
-      <div class="desserts-cta">
-        <a href="../pages/menu.php?category=dessert_items" class="btn-outline">Дивитись всі десерти →</a>
       </div>
     </div>
   </section>
@@ -426,43 +438,18 @@ include '../includes/header.php';
           Переглянути всі відгуки<?= $totalReviews > 0 ? ' (' . $totalReviews . ')' : '' ?> →
         </a>
       </div>
+      <div class="reviews-leave-cta">
+        <a href="../pages/reviews.php#leave-review" class="btn-leave-review">
+          Залишити відгук
+        </a>
+      </div>
     </div>
   </section>
 
 </main>
 
 <?php include '../includes/footer.php'; ?>
-<script src="../static/js/header.js"></script>
 <script src="../static/js/slider.js"></script>
 <script src="../static/js/scroll-reveal.js"></script>
-<script>
-document.querySelectorAll('.btn-add-cart').forEach(btn => {
-  btn.addEventListener('click', async e => {
-    e.stopPropagation();
-    const data = new FormData();
-    data.append('category', btn.dataset.category);
-    data.append('id',       btn.dataset.id);
-    try {
-      const res  = await fetch('../forms/add_to_cart.php', { method: 'POST', body: data });
-      const json = await res.json();
-      if (!json.ok) return;
-      let badge = document.querySelector('.cart-count');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'cart-count';
-        document.querySelector('.cart-wrapper')?.appendChild(badge);
-      }
-      badge.textContent = json.count;
-      btn.classList.add('added');
-      btn.textContent = '✓ Додано';
-      if (window.showToast) window.showToast('✓ Додано до кошика');
-      setTimeout(() => {
-        btn.classList.remove('added');
-        btn.textContent = 'Додати в кошик';
-      }, 1500);
-    } catch (_) {}
-  });
-});
-</script>
 </body>
 </html>

@@ -141,26 +141,6 @@ INSERT INTO `fast_food_items` (`id`, `name`, `description`, `image`, `price`, `p
 
 -- --------------------------------------------------------
 
---
--- Структура таблиці `giftcards`
---
-
-CREATE TABLE `giftcards` (
-  `id` int(11) NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `price` int(11) NOT NULL,
-  `image` varchar(255) DEFAULT 'default.png'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Дамп даних таблиці `giftcards`
---
-
-INSERT INTO `giftcards` (`id`, `title`, `price`, `image`) VALUES
-(1, 'Сертифікат 500 ₴', 500, 'static/images/main/logo.png'),
-(2, 'Сертифікат 1000 ₴', 1000, 'static/images/main/logo.png'),
-(3, 'Сертифікат 2000 ₴', 2000, 'static/images/main/logo.png');
-
 -- --------------------------------------------------------
 
 --
@@ -215,11 +195,8 @@ INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `quantity`, `price`, 
 (13, 22, 2, 1, 210.00, 'pizza_items'),
 (14, 22, 1, 1, 90.00, 'dessert_items'),
 (15, 23, 2, 1, 60.00, 'coffee_items'),
-(16, 23, 1, 1, 500.00, 'giftcards'),
 (17, 24, 2, 1, 60.00, 'coffee_items'),
-(18, 24, 1, 1, 500.00, 'giftcards'),
-(19, 25, 2, 1, 60.00, 'coffee_items'),
-(20, 25, 1, 1, 500.00, 'giftcards');
+(19, 25, 2, 1, 60.00, 'coffee_items');
 
 -- --------------------------------------------------------
 
@@ -387,12 +364,6 @@ ALTER TABLE `fast_food_items`
   ADD KEY `popularity` (`popularity`);
 
 --
--- Індекси таблиці `giftcards`
---
-ALTER TABLE `giftcards`
-  ADD PRIMARY KEY (`id`);
-
---
 -- Індекси таблиці `orders`
 --
 ALTER TABLE `orders`
@@ -471,12 +442,6 @@ ALTER TABLE `dessert_items`
 --
 ALTER TABLE `fast_food_items`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
--- AUTO_INCREMENT для таблиці `giftcards`
---
-ALTER TABLE `giftcards`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT для таблиці `orders`

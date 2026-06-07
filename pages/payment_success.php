@@ -1,13 +1,13 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
 session_start();
 require_once __DIR__ . '/../db/db.php';
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/liqpay.php';
+require_once __DIR__ . '/../includes/telegram.php';
 
-/* ── Determine order_id & verify LiqPay signature if data present ── */
+$isDevBypass = !empty($_SESSION['dev_payment_skip']);
+unset($_SESSION['dev_payment_skip']);
+
 $orderId       = 0;
 $paymentStatus = 'pending';
 $liqpayData    = null;
@@ -38,7 +38,6 @@ if ($paymentStatus === 'failed') {
     exit;
 }
 
-/* ── Fetch order from DB ── */
 $order = null;
 if ($orderId > 0) {
     $stmt = $conn->prepare(
@@ -54,7 +53,13 @@ if ($orderId > 0) {
     }
 }
 
-// Clean up session
+// Dev bypass: callback не спрацьовує на localhost — надсилаємо TG тут
+if ($isDevBypass && $orderId > 0) {
+    notify_order_from_db($orderId, $conn);
+}
+
+// Очищаємо корзину тільки після підтвердженої оплати
+unset($_SESSION['cart']);
 unset($_SESSION['pending_order_id'], $_SESSION['pending_order_total']);
 ?>
 <!DOCTYPE html>
@@ -185,6 +190,14 @@ unset($_SESSION['pending_order_id'], $_SESSION['pending_order_total']);
       80%  { opacity: 1; }
       100% { transform: translateY(105vh) rotate(640deg); opacity: 0; }
     }
+    @media (max-width: 480px) {
+      .success-page-wrap { margin: 24px auto 60px; padding: 0 12px; }
+      .success-card { padding: 32px 20px 28px; border-radius: 16px; }
+      .sv-svg { width: 68px; height: 68px; }
+      .sv-details { padding: 14px 16px; }
+      .sv-btn-primary, .sv-btn-outline { width: 100%; text-align: center; padding: 14px 20px; min-height: 50px; }
+      .sv-actions { flex-direction: column; }
+    }
   </style>
   <script defer src="../static/js/animations.js"></script>
 </head>
@@ -202,11 +215,20 @@ unset($_SESSION['pending_order_id'], $_SESSION['pending_order_total']);
       </svg>
     </div>
 
-    <h2 class="sv-title">Замовлення прийнято! 🎉</h2>
+    <?php if ($isDevBypass): ?>
+    <h2 class="sv-title">Замовлення створено</h2>
+    <p class="sv-sub" style="color:#e65100;">
+      <strong>⚠ Тестовий режим</strong> — LiqPay не налаштовано.<br>
+      Оплата картою не була оброблена. Для реальних платежів<br>
+      вкажіть валідні ключі в <code>.env</code>.
+    </p>
+    <?php else: ?>
+    <h2 class="sv-title">Замовлення прийнято!</h2>
     <p class="sv-sub">
       Дякуємо за замовлення в Coffee Time.<br>
       Ми вже розпочали готувати для вас ☕
     </p>
+    <?php endif; ?>
 
     <?php if ($order): ?>
     <div class="sv-details">
@@ -251,7 +273,14 @@ unset($_SESSION['pending_order_id'], $_SESSION['pending_order_total']);
 
 <script>
 (function () {
-  // Confetti
+  const isDevBypass = <?= $isDevBypass ? 'true' : 'false' ?>;
+
+  // Confetti — тільки при реальній оплаті
+  if (isDevBypass) {
+    const badge = document.querySelector('.cart-count');
+    if (badge) badge.remove();
+    return;
+  }
   const colors = ['#FFC107','#FF7043','#66BB6A','#42A5F5','#AB47BC','#FF8A65'];
   for (let i = 0; i < 80; i++) {
     const el  = document.createElement('div');

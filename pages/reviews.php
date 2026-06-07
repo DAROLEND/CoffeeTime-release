@@ -8,7 +8,6 @@ $page         = 'reviews';
 $pageTitle    = 'Відгуки — Coffee Time';
 $customStyles = ['../static/css/reviews.css'];
 
-/* ── Параметри ────────────────────────────────────── */
 $sortOptions = ['newest', 'oldest', 'best', 'worst'];
 $sort   = in_array($_GET['sort'] ?? '', $sortOptions) ? $_GET['sort'] : 'newest';
 $filter = isset($_GET['filter']) ? (int)$_GET['filter'] : 0;
@@ -16,7 +15,6 @@ if ($filter < 0 || $filter > 5) $filter = 0;
 $pageNum = max(1, (int)($_GET['p'] ?? 1));
 $perPage = 6;
 
-/* ── POST: додати відгук ──────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     if (!isset($_SESSION['user'])) {
@@ -40,7 +38,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $showSuccess = isset($_GET['success']);
 
-/* ── Статистика (всі відгуки) ─────────────────────── */
 $statsRow   = $conn->query("SELECT ROUND(AVG(rating),1) as avg_r, COUNT(*) as total FROM site_reviews")->fetch_assoc();
 $avgRating  = (float)($statsRow['avg_r']  ?? 0);
 $totalCount = (int)($statsRow['total'] ?? 0);
@@ -54,7 +51,6 @@ for ($i = 5; $i >= 1; $i--) {
     $ds->close();
 }
 
-/* ── Відфільтровані + пагіновані відгуки ─────────── */
 $orderMap = [
     'newest' => 'created_at DESC',
     'oldest' => 'created_at ASC',
@@ -63,7 +59,6 @@ $orderMap = [
 ];
 $orderSQL = $orderMap[$sort]; // safe: validated against whitelist above
 
-// Use parameterized queries — $filter is safe as int but we bind it anyway
 if ($filter > 0) {
     $cs = $conn->prepare("SELECT COUNT(*) as cnt FROM site_reviews WHERE rating = ?");
     $cs->bind_param('i', $filter);
@@ -91,18 +86,17 @@ $res = $rs->get_result();
 while ($row = $res->fetch_assoc()) $reviews[] = $row;
 $rs->close();
 
-/* ── Хелпери ──────────────────────────────────────── */
 function avatarColor(string $name): string {
     $code    = mb_ord(mb_strtoupper(mb_substr($name, 0, 1, 'UTF-8'), 'UTF-8'), 'UTF-8');
-    $palette = ['#d4a96a', '#8B4513', '#FFC107', '#c4956a'];
+    $palette = ['#d4a96a', '#8B4513', '#c4956a', '#5a2d0c'];
     return $palette[$code % 4];
 }
 
 function buildUrl(array $overrides): string {
-    $base = ['sort' => $_GET['sort'] ?? 'newest', 'filter' => (int)($_GET['filter'] ?? 0), 'p' => 1];
+    $base   = ['sort' => $_GET['sort'] ?? 'newest', 'filter' => (int)($_GET['filter'] ?? 0), 'p' => 1];
     $params = array_merge($base, $overrides);
-    if ((int)$params['filter'] === 0)  unset($params['filter']);
-    if ($params['sort'] === 'newest')  unset($params['sort']);
+    if ((int)$params['filter'] === 0)   unset($params['filter']);
+    if ($params['sort'] === 'newest')   unset($params['sort']);
     if ((int)($params['p'] ?? 1) <= 1) unset($params['p']);
     return 'reviews.php' . (empty($params) ? '' : '?' . http_build_query($params));
 }
@@ -113,87 +107,16 @@ function renderStarsHtml(float $rating): string {
     return str_repeat('<span class="star-full">★</span>', $full)
          . str_repeat('<span class="star-empty">★</span>', $empty);
 }
-?>
-<!DOCTYPE html>
-<html lang="uk">
-<?php include '../includes/header.php'; ?>
-<body>
-<main class="reviews-page">
 
-  <!-- ═══ HEADER + STATS ═══ -->
-  <section class="rv-header">
-    <div class="container">
-      <h1 class="rv-title">Відгуки наших клієнтів</h1>
-
-      <?php if ($totalCount > 0): ?>
-      <div class="rv-summary">
-
-        <div class="rv-avg">
-          <span class="rv-avg-number" data-value="<?= number_format($avgRating, 1, '.', '') ?>"><?= number_format($avgRating, 1, '.', '') ?></span>
-          <div class="rv-avg-stars"><?= renderStarsHtml($avgRating) ?></div>
-          <span class="rv-avg-label">
-            на основі <?= $totalCount ?>
-            <?= ($totalCount % 10 === 1 && $totalCount % 100 !== 11) ? 'відгуку' : 'відгуків' ?>
-          </span>
-        </div>
-
-        <div class="rv-bars">
-          <?php for ($i = 5; $i >= 1; $i--):
-            $pct = $totalCount > 0 ? round($distribution[$i] / $totalCount * 100) : 0;
-          ?>
-          <div class="rv-bar-row">
-            <span class="rv-bar-label"><?= $i ?>★</span>
-            <div class="rv-bar-track">
-              <div class="rv-bar-fill" style="width:0" data-width="<?= $pct ?>"></div>
-            </div>
-            <span class="rv-bar-pct"><?= $pct ?>%</span>
-          </div>
-          <?php endfor; ?>
-        </div>
-
-      </div>
-      <?php endif; ?>
-    </div>
-  </section>
-
-  <!-- ═══ CONTROLS ═══ -->
-  <section class="rv-controls">
-    <div class="container">
-
-      <div class="rv-controls-top">
-        <div class="rv-tabs">
-          <?php
-          $tabs = ['newest' => 'Нові', 'oldest' => 'Старі', 'best' => 'Висока оцінка', 'worst' => 'Низька оцінка'];
-          foreach ($tabs as $val => $label): ?>
-            <a href="<?= buildUrl(['sort' => $val, 'p' => 1]) ?>"
-               class="rv-tab<?= $sort === $val ? ' rv-tab--active' : '' ?>"><?= $label ?></a>
-          <?php endforeach; ?>
-        </div>
-
-        <a href="https://www.google.com/maps/search/Coffee+Time" target="_blank" class="rv-google-link">
-          Більше відгуків на Google Maps
-        </a>
-      </div>
-
-      <div class="rv-filter-tabs">
-        <span class="rv-filter-label">Фільтр:</span>
-        <a href="<?= buildUrl(['filter' => 0, 'p' => 1]) ?>"
-           class="rv-tab<?= $filter === 0 ? ' rv-tab--active' : '' ?>">Всі</a>
-        <?php for ($i = 5; $i >= 1; $i--): ?>
-          <a href="<?= buildUrl(['filter' => $i, 'p' => 1]) ?>"
-             class="rv-tab<?= $filter === $i ? ' rv-tab--active' : '' ?>"><?= str_repeat('★', $i) ?></a>
-        <?php endfor; ?>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ═══ GRID ═══ -->
-  <section class="rv-grid-section">
-    <div class="container">
-
+function renderGrid(array $reviews, int $pageNum, int $totalPages, string $sort, int $filter): string {
+    ob_start();
+    ?>
+    <div id="rvGridInner">
       <?php if (empty($reviews)): ?>
-        <p class="rv-empty">Відгуків не знайдено.</p>
+        <div class="rv-empty">
+          <div class="rv-empty-icon">☕</div>
+          <p>Відгуків не знайдено.</p>
+        </div>
       <?php else: ?>
       <div class="rv-grid">
         <?php foreach ($reviews as $r):
@@ -202,19 +125,22 @@ function renderStarsHtml(float $rating): string {
           $date    = date('d.m.Y', strtotime($r['created_at']));
           $full    = (int)$r['rating'];
           $rawText = $r['text'];
-          $isLong  = mb_strlen($rawText) > 120;
-          $short   = $isLong ? htmlspecialchars(mb_substr($rawText, 0, 120)) . '...' : htmlspecialchars($rawText);
+          $isLong  = mb_strlen($rawText) > 140;
+          $short   = $isLong ? htmlspecialchars(mb_substr($rawText, 0, 140, 'UTF-8')) . '...' : htmlspecialchars($rawText);
         ?>
         <div class="rv-card">
-          <div class="rv-card-top">
+          <span class="rv-card-quote">❝</span>
+          <div class="rv-card-head">
             <div class="rv-avatar" style="background:<?= $color ?>"><?= $initial ?></div>
-            <span class="rv-name"><?= htmlspecialchars($r['name']) ?></span>
-            <span class="rv-date"><?= $date ?></span>
-          </div>
-          <div class="rv-stars">
-            <?php for ($i = 1; $i <= 5; $i++): ?>
-              <span class="<?= $i <= $full ? 'star-full' : 'star-empty' ?>">★</span>
-            <?php endfor; ?>
+            <div class="rv-card-meta">
+              <span class="rv-name"><?= htmlspecialchars($r['name']) ?></span>
+              <span class="rv-date"><?= $date ?></span>
+            </div>
+            <div class="rv-stars">
+              <?php for ($i = 1; $i <= 5; $i++): ?>
+                <span class="<?= $i <= $full ? 'star-full' : 'star-empty' ?>">★</span>
+              <?php endfor; ?>
+            </div>
           </div>
           <p class="rv-text"
              data-full="<?= htmlspecialchars($rawText) ?>"
@@ -228,19 +154,32 @@ function renderStarsHtml(float $rating): string {
       </div>
       <?php endif; ?>
 
-      <!-- Пагінація -->
       <?php if ($totalPages > 1): ?>
-      <nav class="rv-pagination">
+      <nav class="rv-pagination" aria-label="Pagination">
         <?php if ($pageNum > 1): ?>
           <a href="<?= buildUrl(['p' => $pageNum - 1]) ?>" class="rv-page-btn">← Попередня</a>
         <?php else: ?>
           <span class="rv-page-btn rv-page-btn--disabled">← Попередня</span>
         <?php endif; ?>
 
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-          <a href="<?= buildUrl(['p' => $i]) ?>"
-             class="rv-page-btn<?= $i === $pageNum ? ' rv-page-btn--active' : '' ?>"><?= $i ?></a>
-        <?php endfor; ?>
+        <?php
+          $range = 2;
+          $start = max(1, $pageNum - $range);
+          $end   = min($totalPages, $pageNum + $range);
+          if ($start > 1): ?>
+            <a href="<?= buildUrl(['p' => 1]) ?>" class="rv-page-btn">1</a>
+            <?php if ($start > 2): ?><span class="rv-page-ellipsis">…</span><?php endif; ?>
+          <?php endif;
+
+          for ($i = $start; $i <= $end; $i++): ?>
+            <a href="<?= buildUrl(['p' => $i]) ?>"
+               class="rv-page-btn<?= $i === $pageNum ? ' rv-page-btn--active' : '' ?>"><?= $i ?></a>
+          <?php endfor;
+
+          if ($end < $totalPages): ?>
+            <?php if ($end < $totalPages - 1): ?><span class="rv-page-ellipsis">…</span><?php endif; ?>
+            <a href="<?= buildUrl(['p' => $totalPages]) ?>" class="rv-page-btn"><?= $totalPages ?></a>
+          <?php endif; ?>
 
         <?php if ($pageNum < $totalPages): ?>
           <a href="<?= buildUrl(['p' => $pageNum + 1]) ?>" class="rv-page-btn">Наступна →</a>
@@ -249,7 +188,122 @@ function renderStarsHtml(float $rating): string {
         <?php endif; ?>
       </nav>
       <?php endif; ?>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
+if (isset($_GET['ajax'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok'    => true,
+        'html'  => renderGrid($reviews, $pageNum, $totalPages, $sort, $filter),
+        'count' => $filteredTotal,
+    ]);
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="uk">
+<?php include '../includes/header.php'; ?>
+<body>
+<main class="reviews-page">
+
+  <!-- ═══ HERO ═══ -->
+  <section class="rv-hero">
+    <div class="rv-hero-inner container">
+      <h1 class="rv-title">Відгуки наших клієнтів</h1>
+      <p class="rv-subtitle">Думки людей, які вже скуштували смак Coffee Time</p>
+    </div>
+
+    <?php if ($totalCount > 0): ?>
+    <div class="rv-stats-card">
+      <div class="rv-avg">
+        <span class="rv-avg-num" data-value="<?= number_format($avgRating, 1, '.', '') ?>">
+          <?= number_format($avgRating, 1, '.', '') ?>
+        </span>
+        <div class="rv-avg-stars"><?= renderStarsHtml($avgRating) ?></div>
+        <span class="rv-avg-label">
+          на основі <?= $totalCount ?>
+          <?= ($totalCount % 10 === 1 && $totalCount % 100 !== 11) ? 'відгуку' : 'відгуків' ?>
+        </span>
+      </div>
+
+      <div class="rv-stats-divider"></div>
+
+      <div class="rv-bars">
+        <?php for ($i = 5; $i >= 1; $i--):
+          $pct = $totalCount > 0 ? round($distribution[$i] / $totalCount * 100) : 0;
+        ?>
+        <div class="rv-bar-row">
+          <span class="rv-bar-label"><?= $i ?>★</span>
+          <div class="rv-bar-track">
+            <div class="rv-bar-fill" style="width:0" data-width="<?= $pct ?>"></div>
+          </div>
+          <span class="rv-bar-pct"><?= $pct ?>%</span>
+        </div>
+        <?php endfor; ?>
+      </div>
+
+      <div class="rv-stats-divider"></div>
+
+      <div class="rv-stats-badge">
+        <div class="rv-stats-badge-icon">★</div>
+        <span class="rv-stats-badge-text">Рекомендують<br>наші клієнти</span>
+      </div>
+    </div>
+    <?php endif; ?>
+  </section>
+
+  <!-- ═══ CONTROLS ═══ -->
+  <section class="rv-controls" id="rvControls">
+    <div class="container">
+      <div class="rv-controls-inner">
+
+        <div class="rv-ctrl-group">
+          <span class="rv-ctrl-label">Сортування</span>
+          <div class="rv-tabs" id="rvSortTabs">
+            <?php
+            $sortTabs = ['newest' => 'Нові', 'oldest' => 'Старі', 'best' => 'Висока оцінка', 'worst' => 'Низька оцінка'];
+            foreach ($sortTabs as $val => $label): ?>
+              <button type="button"
+                      class="rv-tab<?= $sort === $val ? ' rv-tab--active' : '' ?>"
+                      data-sort="<?= $val ?>"><?= $label ?></button>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <div class="rv-ctrl-group">
+          <span class="rv-ctrl-label">Рейтинг</span>
+          <div class="rv-filter-tabs" id="rvFilterTabs">
+            <button type="button"
+                    class="rv-tab<?= $filter === 0 ? ' rv-tab--active' : '' ?>"
+                    data-filter="0">Всі</button>
+            <?php for ($i = 5; $i >= 1; $i--): ?>
+              <button type="button"
+                      class="rv-tab<?= $filter === $i ? ' rv-tab--active' : '' ?>"
+                      data-filter="<?= $i ?>"><?= str_repeat('★', $i) ?></button>
+            <?php endfor; ?>
+          </div>
+        </div>
+
+        <a href="https://www.google.com/maps/search/Coffee+Time" target="_blank" rel="noopener" class="rv-google-link">
+          Google Maps →
+        </a>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ GRID ═══ -->
+  <section class="rv-grid-section">
+    <div class="container">
+      <div id="rvGridWrap"
+           data-sort="<?= h($sort) ?>"
+           data-filter="<?= $filter ?>"
+           data-page="<?= $pageNum ?>">
+        <?= renderGrid($reviews, $pageNum, $totalPages, $sort, $filter) ?>
+      </div>
     </div>
   </section>
 
@@ -264,21 +318,19 @@ function renderStarsHtml(float $rating): string {
       <?php endif; ?>
 
       <?php if (!isset($_SESSION['user'])): ?>
-        <!-- Не авторизований -->
         <div class="rv-auth-prompt">
-          <p class="rv-auth-text">Увійдіть щоб залишити відгук</p>
+          <div class="rv-auth-icon">☕</div>
+          <p class="rv-auth-text">Увійдіть, щоб залишити відгук</p>
           <a href="../forms/login.php" class="rv-auth-btn">Увійти</a>
         </div>
 
       <?php elseif (!empty($_SESSION['reviewed'])): ?>
-        <!-- Вже залишив відгук -->
         <div class="rv-already">
           <span class="rv-already-icon">✓</span>
           <p>Ви вже залишили відгук. Дякуємо за вашу думку!</p>
         </div>
 
       <?php else: ?>
-        <!-- Форма -->
         <div class="rv-form-wrap">
           <h2>Залишити свій відгук</h2>
           <form method="post" class="rv-form" id="reviewForm" novalidate>
@@ -321,7 +373,6 @@ function renderStarsHtml(float $rating): string {
 </main>
 
 <?php include '../includes/footer.php'; ?>
-<script src="../static/js/header.js"></script>
 <script src="../static/js/reviews.js"></script>
 </body>
 </html>

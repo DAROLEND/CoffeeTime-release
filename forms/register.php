@@ -85,15 +85,15 @@ $customStyles = ['../static/css/auth.css'];
 
       <div class="auth-features">
         <div class="auth-feature">
-          <span class="auth-feature-icon">☕</span>
+          <?= icon('coffee-cup', 20, 'rgba(255,255,255,0.85)', 'auth-feature-icon') ?>
           <span>Замовляй каву та їжу онлайн</span>
         </div>
         <div class="auth-feature">
-          <span class="auth-feature-icon">🧾</span>
+          <?= icon('receipt', 20, 'rgba(255,255,255,0.85)', 'auth-feature-icon') ?>
           <span>Зберігай історію замовлень</span>
         </div>
         <div class="auth-feature">
-          <span class="auth-feature-icon">🍕</span>
+          <?= icon('pizza', 20, 'rgba(255,255,255,0.85)', 'auth-feature-icon') ?>
           <span>Кава, піца, десерти — все в одному місці</span>
         </div>
       </div>
@@ -240,7 +240,6 @@ $customStyles = ['../static/css/auth.css'];
 <script>
 (function () {
 
-  /* ── Eye toggles ── */
   document.querySelectorAll('.eye-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const inp  = document.getElementById(btn.dataset.target);
@@ -258,7 +257,6 @@ $customStyles = ['../static/css/auth.css'];
     });
   });
 
-  /* ── Password strength ── */
   const bars  = [
     document.getElementById('pwBar1'),
     document.getElementById('pwBar2'),
@@ -288,7 +286,6 @@ $customStyles = ['../static/css/auth.css'];
     pwLabel.className    = 'pw-strength-label' + (s ? ' ' + levels[s] : '');
   }
 
-  /* ── Field refs ── */
   const emailInp   = document.getElementById('regEmail');
   const loginInp   = document.getElementById('regLogin');
   const passInp    = document.getElementById('regPassword');
@@ -324,7 +321,6 @@ $customStyles = ['../static/css/auth.css'];
     setField(ffConfirm, confirmInp.value === passInp.value && confirmInp.value.length > 0);
   });
 
-  /* ── Submit ── */
   document.getElementById('registerForm').addEventListener('submit', function (e) {
     const v1 = emailRe.test(emailInp.value.trim());
     const v2 = loginRe.test(loginInp.value.trim());
@@ -346,14 +342,12 @@ $customStyles = ['../static/css/auth.css'];
     document.getElementById('regSubmit').classList.add('loading');
   });
 
-  /* ── Success overlay (server confirmed registration) ── */
   <?php if ($successRegistered): ?>
   const overlay = document.getElementById('authSuccess');
   overlay.classList.add('show');
   setTimeout(() => { window.location.href = 'login.php'; }, 2800);
   <?php endif; ?>
 
-  /* ── Shake on server errors ── */
   <?php if ($errors): ?>
   right.classList.add('shake');
   right.addEventListener('animationend', () => right.classList.remove('shake'), { once: true });

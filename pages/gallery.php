@@ -6,7 +6,6 @@ $page      = 'gallery';
 $pageTitle = 'Галерея — Coffee Time';
 $customStyles = ['../static/css/gallery.css'];
 
-/* ── Load photos from DB ── */
 $photos = [];
 $res = $conn->query("SELECT * FROM gallery ORDER BY created_at DESC");
 if ($res) while ($row = $res->fetch_assoc()) $photos[] = $row;
@@ -47,7 +46,6 @@ include '../includes/header.php';
         <img
           src="../static/images/gallery/<?= htmlspecialchars($photo['filename']) ?>"
           alt="<?= htmlspecialchars($photo['alt']) ?>"
-          loading="lazy"
         >
         <div class="g-overlay">
           <svg class="g-zoom-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -88,8 +86,8 @@ include '../includes/header.php';
 </div>
 
 <?php include '../includes/footer.php'; ?>
-<script src="https://unpkg.com/imagesloaded@4/imagesloaded.pkgd.min.js"></script>
-<script src="https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js"></script>
+<script src="../static/js/vendor/imagesloaded.pkgd.min.js"></script>
+<script src="../static/js/vendor/masonry.pkgd.min.js"></script>
 <script src="../static/js/gallery.js"></script>
 </body>
 </html>

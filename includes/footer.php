@@ -1,5 +1,7 @@
 <?php
-// footer.php
+require_once __DIR__ . '/config.php';
+$_S  = SITE_URL;
+$_SP = SITE_PATH;
 ?>
 <button class="scroll-top-btn" aria-label="Вгору">↑</button>
 
@@ -8,16 +10,16 @@
 
     <!-- Колонка 1: лого + підпис + соцмережі -->
     <div class="footer__col footer__brand">
-      <a href="../pages/index.php" class="footer-logo-link">
-        <img src="../static/images/main/logo-cup.svg" alt="Coffee Time" class="footer-logo-img">
+      <a href="<?= $_S ?>/pages/index.php" class="footer-logo-link">
+        <img src="<?= $_SP ?>/static/images/main/logo-cup.svg" alt="Coffee Time" class="footer-logo-img">
       </a>
       <p class="footer-tagline">Затишне кафе у серці міста</p>
       <div class="footer-socials">
         <a href="https://www.instagram.com/coffeetime_husiatyn/" target="_blank" rel="noopener" aria-label="Instagram" class="social-btn">
-          <img src="../static/images/icons/instagram.svg" alt="Instagram">
+          <img src="<?= $_SP ?>/static/images/icons/instagram.svg" alt="Instagram">
         </a>
         <a href="#" target="_blank" rel="noopener" aria-label="Facebook" class="social-btn">
-          <img src="../static/images/icons/facebook.svg" alt="Facebook">
+          <img src="<?= $_SP ?>/static/images/icons/facebook.svg" alt="Facebook">
         </a>
       </div>
     </div>
@@ -50,10 +52,10 @@
     <div class="footer__col">
       <h4>Навігація</h4>
       <ul>
-        <li><a href="../pages/index.php">Головна</a></li>
-        <li><a href="../pages/menu.php">Меню</a></li>
-        <li><a href="../pages/gallery.php">Галерея</a></li>
-        <li><a href="../pages/reviews.php">Відгуки</a></li>
+        <li><a href="<?= $_S ?>/pages/index.php">Головна</a></li>
+        <li><a href="<?= $_S ?>/pages/menu.php">Меню</a></li>
+        <li><a href="<?= $_S ?>/pages/gallery.php">Галерея</a></li>
+        <li><a href="<?= $_S ?>/pages/reviews.php">Відгуки</a></li>
       </ul>
     </div>
 
@@ -61,6 +63,6 @@
 
   <div class="footer__bottom">
     <span>© <?= date('Y') ?> Coffee Time. All Rights Reserved.</span>
-    <span>Розроблено з ❤️ у Гусятині</span>
+    <span>Розроблено з <?= icon('heart', 14, '#e53935') ?> у Гусятині</span>
   </div>
 </footer>

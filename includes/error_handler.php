@@ -1,23 +1,12 @@
 <?php
-/**
- * Coffee Time — Production error handler
- *
- * Include at the very top of entry-point files (after env.php is loaded).
- * Controlled by APP_ENV in .env:
- *   APP_ENV=development → errors shown on screen
- *   APP_ENV=production  → errors hidden, logged to logs/php_errors.log
- */
-
 require_once __DIR__ . '/env.php';
 
 $isProduction = (getenv('APP_ENV') === 'production');
 
-/* ── Suppress screen output in production ──────────────────────────────────── */
 ini_set('display_errors',         $isProduction ? '0' : '1');
 ini_set('display_startup_errors', $isProduction ? '0' : '1');
 error_reporting(E_ALL);
 
-/* ── Log to file ────────────────────────────────────────────────────────────── */
 $logDir = dirname(__DIR__) . '/logs';
 if (!is_dir($logDir)) {
     @mkdir($logDir, 0750, true);
@@ -29,7 +18,6 @@ if (!$isProduction) {
     return; // Development: let PHP show errors normally
 }
 
-/* ── Custom handlers: log + show friendly page ─────────────────────────────── */
 set_error_handler(function (int $errno, string $errstr, string $errfile, int $errline): bool {
     if (!(error_reporting() & $errno)) {
         return false;

@@ -10,10 +10,25 @@ require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/telegram.php';
 
 $allowedTables = [
-    'coffee_items', 'fast_food_items', 'pizza_items',
-    'cold_drink_items', 'dessert_items', 'giftcards',
+    'coffee_items', 'fast_food_items', 'pizza_items', 'mini_pizza_items',
+    'cold_drink_items', 'dessert_items',
     'sushi_items', 'sushi_sets', 'salad_items', 'cake_items',
 ];
+
+if (!empty($_GET['cancel_order'])) {
+    $coid = (int)$_GET['cancel_order'];
+    if ($coid > 0) {
+        $cs = $conn->prepare(
+            "UPDATE orders SET status='cancelled', payment_status='failed'
+             WHERE order_id=? AND payment_status IN ('pending','') AND status='new'"
+        );
+        if ($cs) { $cs->bind_param('i', $coid); $cs->execute(); $cs->close(); }
+    }
+    unset($_SESSION['pending_order_id'], $_SESSION['pending_order_total']);
+    // Корзина залишається — редирект на checkout без параметра
+    header('Location: checkout.php');
+    exit;
+}
 
 if (empty($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
     header('Location: cart.php');
@@ -28,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $cart = $_SESSION['cart'];
 $user = $_SESSION['user'] ?? null;
 
-/* ── Fetch cart items from DB ── */
 $orderDetails = [];
 $total = 0.0;
 
@@ -37,7 +51,8 @@ foreach ($cart as $ci) {
     $id    = (int)$ci['id'];
     if (!in_array($table, $allowedTables, true)) continue;
 
-    $stmt = $conn->prepare("SELECT id, name, image, price FROM `$table` WHERE id = ?");
+    $cols = ($table === 'sushi_sets') ? 'id, name, image, price, pieces_count' : 'id, name, image, price';
+    $stmt = $conn->prepare("SELECT $cols FROM `$table` WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     if ($row = $stmt->get_result()->fetch_assoc()) {
@@ -47,6 +62,12 @@ foreach ($cart as $ci) {
             $row['price']  = (float)$ci['price_override'];
             $row['weight'] = $ci['weight'] ?? 1;
         }
+        // Pizza / variant options
+        if (isset($ci['selected_size']))    $row['selected_size']    = $ci['selected_size'];
+        if (isset($ci['cheese_crust']))     $row['cheese_crust']     = (int)$ci['cheese_crust'];
+        if (isset($ci['takeaway']))         $row['takeaway']         = (int)$ci['takeaway'];
+        if (isset($ci['selected_variant'])) $row['selected_variant'] = $ci['selected_variant'];
+
         $row['subtotal'] = $row['price'] * $ci['quantity'];
         $total += $row['subtotal'];
         $orderDetails[] = $row;
@@ -54,15 +75,46 @@ foreach ($cart as $ci) {
     $stmt->close();
 }
 
-/* ── Form values (pre-fill from session or POST) ── */
-$firstName = $_POST['first_name'] ?? ($user['client_name']        ?? '');
-$lastName  = $_POST['last_name']  ?? ($user['client_surname']      ?? '');
-$phone     = $_POST['phone']      ?? ($user['client_PhoneNumber']  ?? '');
-$readyTime = $_POST['ready_time'] ?? '';
-$comment   = $_POST['comment']    ?? '';
-$payment   = $_POST['payment']    ?? '';
+// Kitchen works in parallel; time is driven by the heaviest item type
+$prepMinutes = 0; // travel time added client-side via travel_minutes field
+foreach ($orderDetails as $item) {
+    $qty = (int)$item['quantity'];
+    switch ($item['category']) {
+        case 'pizza_items':      $prepMinutes += $qty * 6;  break;
+        case 'mini_pizza_items': $prepMinutes += $qty * 5;  break;
+        case 'sushi_sets':
+            $pieces = (int)($item['pieces_count'] ?? 0);
+            // ~0.7 хв/штука, мінімум 15 хв за сет якщо pieces_count не заповнено
+            $perSet = $pieces > 0 ? (int)ceil($pieces * 0.7) : 20;
+            $prepMinutes += $qty * $perSet;
+            break;
+        case 'sushi_items':      $prepMinutes += $qty * 12; break;
+        case 'fast_food_items':  $prepMinutes += $qty * 7;  break;
+        case 'salad_items':      $prepMinutes += $qty * 5;  break;
+        case 'coffee_items':     $prepMinutes += $qty * 3;  break;
+        case 'cold_drink_items': $prepMinutes += $qty * 2;  break;
+        case 'ice_cream_items':  $prepMinutes += $qty * 2;  break;
+    }
+}
+$prepMinutes = min(90, (int)(ceil($prepMinutes / 15) * 15)); // round up to 15-min slot, cap 90
 
-/* ── Café schedule data (used for JS output and server-side validation) ── */
+$draft = [];
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && !empty($_SESSION['checkout_draft'])) {
+    $draft = $_SESSION['checkout_draft'];
+    unset($_SESSION['checkout_draft']);
+}
+$firstName = $_POST['first_name'] ?? $draft['first_name'] ?? ($user['client_name']       ?? '');
+$lastName  = $_POST['last_name']  ?? $draft['last_name']  ?? ($user['client_surname']     ?? '');
+$phone     = $_POST['phone']      ?? $draft['phone']      ?? ($user['client_PhoneNumber'] ?? '');
+$email     = trim($_POST['customer_email'] ?? $draft['customer_email'] ?? ($user['email'] ?? $user['client_email'] ?? ''));
+$email     = filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+$readyTime = $_POST['ready_time'] ?? $draft['ready_time'] ?? '';
+$comment   = $_POST['comment']    ?? $draft['comment']    ?? '';
+$payment   = $_POST['payment']    ?? $draft['payment']    ?? '';
+$orderType = in_array($_POST['order_type'] ?? $draft['order_type'] ?? '', ['dine_in','takeaway'])
+    ? ($_POST['order_type'] ?? $draft['order_type'])
+    : 'dine_in';
+
 $next          = get_next_available_time();
 $schedule_json = json_encode(get_cafe_schedule());
 $next_json     = json_encode($next ? [
@@ -74,58 +126,65 @@ $next_json     = json_encode($next ? [
 $orderId      = 0;
 $errorMessage = '';
 
-/* ── Handle POST ── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
 
     if (!$firstName || !$lastName || !$phone || !$readyTime || !$payment) {
         $errorMessage = "Будь ласка, заповніть усі обов'язкові поля.";
     } else {
-        /* Working hours validation */
-        preg_match('/(\d{2}:\d{2})$/', trim($readyTime), $_tm);
-        $pickup_time = $_tm[1] ?? '';
+        /* Working hours validation — new format "YYYY-MM-DD HH:MM" */
+        $readyTime = trim($readyTime);
+        if (preg_match('/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})$/', $readyTime, $dtm)) {
+            $orderDate = new DateTime($readyTime, new DateTimeZone('Europe/Kiev'));
+            $now_tz    = new DateTime('now', new DateTimeZone('Europe/Kiev'));
+            $minTime   = clone $now_tz;
+            $travelMins = max(0, min(60, (int)($_POST['travel_minutes'] ?? 15)));
+            $minTime->modify('+' . ($prepMinutes + $travelMins) . ' minutes');
 
-        if (!$pickup_time) {
-            $errorMessage = 'Вкажіть коректний час готовності';
-        } else {
-            $now_tz  = new DateTime('now', new DateTimeZone('Europe/Kiev'));
-            $minTime = clone $now_tz;
-            $minTime->modify('+10 minutes');
-
-            [$h, $m] = explode(':', $pickup_time);
-
-            // Build the order datetime starting from today
-            $orderDate = clone $now_tz;
-            $orderDate->setTime((int)$h, (int)$m, 0);
-
-            // If the chosen time has already passed (or is within 10 min),
-            // treat it as tomorrow — this handles "08:00 tomorrow" correctly
-            // when the café is currently closed and JS snapped to next morning.
-            if ($orderDate < $minTime) {
-                $orderDate->modify('+1 day');
+            if ($orderDate->format('Y-m-d') === $now_tz->format('Y-m-d') && $orderDate < $minTime) {
+                $errorMessage = 'Обраний час вже минув. Оберіть пізніший час.';
             }
 
-            // Now check whether the café is actually open at that datetime
-            if (!is_cafe_open_at($orderDate)) {
+            // Не більше 14 днів вперед
+            if (!$errorMessage) {
+                $maxDate = clone $now_tz;
+                $maxDate->modify('+14 days');
+                $maxDate->setTime(23, 59, 59);
+                if ($orderDate > $maxDate) {
+                    $errorMessage = 'Можна замовити не більше ніж на 14 днів вперед.';
+                }
+            }
+
+            // Кафе відкрите
+            if (!$errorMessage && !is_cafe_open_at($orderDate)) {
                 $next_t  = get_next_available_time();
                 $suggest = $next_t
                     ? ' Найближчий час: ' . ($next_t['date_label'] ? $next_t['date_label'] . ' ' : '') . $next_t['time']
                     : '';
                 $errorMessage = 'Кафе не працює в цей час.' . $suggest;
             }
+
+            // Замовлення на майбутній день — тільки онлайн-оплата
+            if (!$errorMessage
+                && $orderDate->format('Y-m-d') > $now_tz->format('Y-m-d')
+                && $payment === 'cash_on_pickup') {
+                $errorMessage = 'Замовлення на майбутній день приймаються лише з передоплатою карткою онлайн.';
+            }
+        } else {
+            $errorMessage = 'Вкажіть коректний час готовності';
         }
 
         if (!$errorMessage) {
             $userIdParam = isset($user['client_id']) ? (int)$user['client_id'] : null;
             $sql = "INSERT INTO orders
                       (user_id, total, delivery_address, phone, status,
-                       customer_name, customer_surname, comment, ready_time, payment_method)
-                    VALUES (?, ?, '', ?, 'pending', ?, ?, ?, ?, ?)";
+                       customer_name, customer_surname, customer_email, comment, ready_time, payment_method, order_type)
+                    VALUES (?, ?, '', ?, 'new', ?, ?, ?, ?, ?, ?, ?)";
 
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param('idssssss',
+            $stmt->bind_param('idssssssss',
                 $userIdParam, $total, $phone,
-                $firstName, $lastName, $comment, $readyTime, $payment
+                $firstName, $lastName, $email, $comment, $readyTime, $payment, $orderType
             );
 
             if ($stmt->execute()) {
@@ -133,17 +192,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->close();
 
                 foreach ($orderDetails as $item) {
-                    $productId = (int)$item['id'];
-                    $quantity  = (int)$item['quantity'];
-                    $price     = (float)$item['price'];
-                    $category  = $item['category'];
-                    $table     = $item['category'];
+                    $productId       = (int)$item['id'];
+                    $quantity        = (int)$item['quantity'];
+                    $price           = (float)$item['price'];
+                    $category        = $item['category'];
+                    $table           = $item['category'];
+                    $selSize         = $item['selected_size']    ?? 'small';
+                    $selVariant      = $item['selected_variant'] ?? null;
+                    $sCheeseCrust    = (int)($item['cheese_crust'] ?? 0);
+                    $sInBox          = (int)($item['takeaway']    ?? 0);
 
                     $stmt2 = $conn->prepare(
-                        "INSERT INTO order_items (order_id, product_id, category, quantity, price)
-                         VALUES (?, ?, ?, ?, ?)"
+                        "INSERT INTO order_items (order_id, product_id, category, quantity, price,
+                                                  selected_size, selected_variant, cheese_crust, takeaway)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                     );
-                    $stmt2->bind_param('iisid', $orderId, $productId, $category, $quantity, $price);
+                    $stmt2->bind_param('iisidssii',
+                        $orderId, $productId, $category, $quantity, $price,
+                        $selSize, $selVariant, $sCheeseCrust, $sInBox
+                    );
                     $stmt2->execute();
                     $stmt2->close();
 
@@ -153,20 +220,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $upd->close();
                 }
 
-                /* ── Telegram notification ── */
-                notify_new_order(
-                    $orderId, $firstName, $lastName, $phone,
-                    $readyTime, $payment, $total,
-                    array_map(fn($it) => [
-                        'name'     => $it['name'],
-                        'quantity' => $it['quantity'],
-                        'price'    => $it['price'],
-                    ], $orderDetails)
-                );
+                require_once __DIR__ . '/../includes/reminders.php';
+                schedule_reminders($conn, $orderId, $readyTime, $email ?: null);
+
+                if ($payment !== 'card_online') {
+                    notify_new_order(
+                        $orderId, $firstName, $lastName, $phone,
+                        $readyTime, $payment, $total,
+                        array_map(fn($it) => [
+                            'name'     => $it['name'],
+                            'quantity' => $it['quantity'],
+                            'price'    => $it['price'],
+                        ], $orderDetails)
+                    );
+                }
 
                 if ($payment === 'card_online') {
-                    /* ── Card: save order then redirect to LiqPay ── */
-                    unset($_SESSION['cart']);
+
+                    $_SESSION['checkout_draft'] = [
+                        'first_name'     => $firstName,
+                        'last_name'      => $lastName,
+                        'phone'          => $phone,
+                        'customer_email' => $email,
+                        'ready_time'     => $readyTime,
+                        'comment'        => $comment,
+                        'payment'        => $payment,
+                        'order_type'     => $orderType,
+                    ];
                     $_SESSION['pending_order_id']    = $orderId;
                     $_SESSION['pending_order_total'] = $total;
 
@@ -189,7 +269,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
 
-                /* ── Cash: PRG redirect to success page ── */
                 unset($_SESSION['cart']);
                 $_SESSION['pending_order_id'] = $orderId;
                 header('Location: payment_success.php');
@@ -226,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php if (!empty($_SESSION['flash_error'])): ?>
   <div style="background:#ffebee;color:#c62828;padding:12px 20px;border-radius:8px;
               margin-bottom:20px;font-size:14px;border:1px solid #f5c6c6;">
-    ⚠️ <?= h($_SESSION['flash_error']) ?>
+    <?= h($_SESSION['flash_error']) ?>
     <?php unset($_SESSION['flash_error']); ?>
   </div>
   <?php endif; ?>
@@ -246,7 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Left: form -->
     <div class="checkout-form-col">
 
-      <?php if ($errorMessage): ?>
+      <?php if ($errorMessage && $errorMessage !== "Будь ласка, заповніть усі обов'язкові поля."): ?>
         <div class="checkout-error"><?= htmlspecialchars($errorMessage) ?></div>
       <?php endif; ?>
 
@@ -265,10 +344,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="hidden" name="ready_time" id="readyTimeHidden"
                value="<?= htmlspecialchars($readyTime) ?>">
 
-        <!-- Section 1: Contact -->
+        <input type="hidden" name="order_type" id="orderTypeInput" value="<?= htmlspecialchars($orderType) ?>">
+
+        <!-- Order type selector -->
+        <div class="form-section order-type-section">
+          <h2 class="section-title" style="margin-bottom:14px">
+            <span class="section-num">1</span> Тип замовлення
+          </h2>
+          <div class="order-type-btns">
+            <button type="button" class="ot-btn <?= $orderType === 'dine_in' ? 'active' : '' ?>" data-type="dine_in">
+              <?= icon('dine-in', 32, '#8B4513', 'ot-icon') ?>
+              <span class="ot-label">В кафе</span>
+              <span class="ot-sub">Їжте на місці</span>
+            </button>
+            <button type="button" class="ot-btn <?= $orderType === 'takeaway' ? 'active' : '' ?>" data-type="takeaway">
+              <?= icon('takeaway', 32, '#8B4513', 'ot-icon') ?>
+              <span class="ot-label">З собою</span>
+              <span class="ot-sub">Заберіть замовлення</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 2: Contact -->
         <div class="form-section" id="section1">
           <h2 class="section-title">
-            <span class="section-num">1</span> Контактні дані
+            <span class="section-num">2</span> Контактні дані
           </h2>
           <div class="form-row">
             <div>
@@ -291,47 +391,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
           <div class="field-group" id="fg-phone">
-            <input type="tel" id="phone" name="phone" placeholder=" "
+            <input type="tel" id="phone" name="phone" placeholder="+38 (0XX) XXX-XX-XX"
                    value="<?= htmlspecialchars($phone, ENT_QUOTES) ?>"
                    autocomplete="tel">
             <label for="phone">Телефон *</label>
           </div>
           <div class="field-msg" id="msg-phone"></div>
+          <div class="field-group" id="fg-email" style="margin-top:4px">
+            <input type="email" id="customer_email" name="customer_email"
+                   placeholder="your@email.com"
+                   value="<?= htmlspecialchars($email) ?>"
+                   autocomplete="email">
+            <label for="customer_email">Email для нагадувань (необов'язково)</label>
+            <div class="field-msg" id="msg-email"></div>
+          </div>
         </div>
 
-        <!-- Section 2: Time -->
+        <!-- Section 3: Date & Time -->
         <div class="form-section" id="section2">
           <h2 class="section-title">
-            <span class="section-num">2</span> Час отримання
+            <span class="section-num">3</span> Дата та час отримання
           </h2>
-          <div class="time-chips" id="timeChips">
-            <button type="button" class="time-chip active" data-offset="15">
-              <?php if ($next && $next['is_today']): ?>
-                Якнайшвидше (~<?= h($next['time']) ?>)
-              <?php elseif ($next): ?>
-                Перший час: <?= h($next['date_label']) ?> <?= h($next['time']) ?>
-              <?php else: ?>
-                Кафе зачинене
-              <?php endif; ?>
-            </button>
-            <button type="button" class="time-chip" data-offset="30">+30 хв</button>
-            <button type="button" class="time-chip" data-offset="60">+1 год</button>
-            <button type="button" class="time-chip" data-offset="custom">Вибрати час</button>
-          </div>
-          <div class="time-custom" id="timeCustom">
-            <div class="field-group" id="fg-time">
-              <input type="time" id="readyTimeInput" placeholder=" " step="900">
-              <label for="readyTimeInput">Оберіть час *</label>
+
+          <button type="button" class="dt-asap-btn" id="dtAsapBtn">
+            <span class="dt-asap-label">Якнайшвидше</span>
+            <span class="dt-asap-time" id="dtAsapTime"></span>
+          </button>
+
+          <!-- Travel time chips (shown only when ASAP active + today) -->
+          <div class="dt-travel" id="dtTravel">
+            <span class="dt-travel-label">Час до кафе:</span>
+            <div class="dt-travel-chips">
+              <button type="button" class="dt-travel-chip" data-min="5">5 хв</button>
+              <button type="button" class="dt-travel-chip active" data-min="15">15 хв</button>
+              <button type="button" class="dt-travel-chip" data-min="25">25 хв</button>
+              <button type="button" class="dt-travel-chip" data-min="35">35 хв</button>
             </div>
-            <div class="field-msg" id="msg-time"></div>
           </div>
+          <input type="hidden" id="travelMinHidden" name="travel_minutes" value="15">
+
+          <!-- Drum picker -->
+          <div class="dt-drums" id="dtDrums">
+            <div class="dt-drum-col">
+              <div class="dt-drum-lbl">Дата</div>
+              <div class="dt-drum-wrap">
+                <div class="dt-drum" id="dtDayDrum"></div>
+                <div class="dt-drum-hl"></div>
+                <div class="dt-drum-fade dt-drum-fade-t"></div>
+                <div class="dt-drum-fade dt-drum-fade-b"></div>
+              </div>
+            </div>
+            <div class="dt-drum-sep"></div>
+            <div class="dt-drum-col" style="flex:0 0 68px">
+              <div class="dt-drum-lbl">Год</div>
+              <div class="dt-drum-wrap">
+                <div class="dt-drum" id="dtHourDrum"></div>
+                <div class="dt-drum-hl"></div>
+                <div class="dt-drum-fade dt-drum-fade-t"></div>
+                <div class="dt-drum-fade dt-drum-fade-b"></div>
+              </div>
+            </div>
+            <div class="dt-drum-colon"><span>:</span></div>
+            <div class="dt-drum-col" style="flex:0 0 58px">
+              <div class="dt-drum-lbl">Хв</div>
+              <div class="dt-drum-wrap">
+                <div class="dt-drum" id="dtMinDrum"></div>
+                <div class="dt-drum-hl"></div>
+                <div class="dt-drum-fade dt-drum-fade-t"></div>
+                <div class="dt-drum-fade dt-drum-fade-b"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dt-summary" id="dtSummary" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span id="dtSummaryText"></span>
+          </div>
+
+          <div class="field-msg" id="msg-time"></div>
           <p class="time-hint">Пн–Пт 08:00–20:00 &nbsp;·&nbsp; Сб 10:00–20:00 &nbsp;·&nbsp; Нд 12:00–20:00</p>
         </div>
 
-        <!-- Section 3: Comment -->
+        <!-- Section 4: Comment -->
         <div class="form-section" id="section3">
           <h2 class="section-title">
-            <span class="section-num">3</span> Коментар до замовлення
+            <span class="section-num">4</span> Коментар до замовлення
           </h2>
           <div class="field-group" id="fg-comment">
             <textarea id="comment" name="comment" placeholder=" " rows="3"><?= htmlspecialchars($comment) ?></textarea>
@@ -342,7 +491,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- Section 4: Payment -->
         <div class="form-section" id="section4">
           <h2 class="section-title">
-            <span class="section-num">4</span> Спосіб оплати
+            <span class="section-num">5</span> Спосіб оплати
           </h2>
           <div class="payment-cards" id="paymentCards">
             <label class="payment-card">
@@ -351,9 +500,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span class="pay-checkmark">
                 <svg viewBox="0 0 12 10"><polyline points="1.5 5 4.5 8.5 10.5 1.5"/></svg>
               </span>
-              <div class="pay-icon">💵</div>
-              <div class="pay-name">Готівка</div>
-              <div class="pay-desc">Оплата при отриманні</div>
+              <?= icon('cash', 32, '#8B4513', 'pay-icon') ?>
+              <div class="pay-name">При отриманні</div>
+              <div class="pay-desc">Готівка або картка на місці</div>
             </label>
             <label class="payment-card">
               <input type="radio" name="payment" value="card_online"
@@ -361,16 +510,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <span class="pay-checkmark">
                 <svg viewBox="0 0 12 10"><polyline points="1.5 5 4.5 8.5 10.5 1.5"/></svg>
               </span>
-              <div class="pay-icon">💳</div>
-              <div class="pay-name">Картка</div>
-              <div class="pay-desc">Visa / Mastercard</div>
+              <?= icon('card', 32, '#8B4513', 'pay-icon') ?>
+              <div class="pay-name">Картка онлайн</div>
+              <div class="pay-desc">Visa / Mastercard через LiqPay</div>
             </label>
           </div>
           <div class="field-msg" id="msg-payment"></div>
 
-          <!-- LiqPay info (shown when "Картка" is selected) -->
+          <!-- LiqPay info (shown when "Картка онлайн" is selected) -->
           <div class="liqpay-info" id="liqpayInfo">
-            <span class="liqpay-lock">🔒</span>
+            <?= icon('lock', 16, '#aaa', 'liqpay-lock') ?>
             <p>Ви будете перенаправлені на захищену сторінку оплати LiqPay.
                Дані вашої картки обробляються безпечно за стандартом
                <strong>PCI DSS</strong>.</p>
@@ -389,9 +538,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <ul class="order-items-list">
           <?php foreach ($orderDetails as $it): ?>
           <li class="order-item">
-            <img src="../<?= htmlspecialchars($it['image'], ENT_QUOTES) ?>"
-                 alt="<?= htmlspecialchars($it['name'], ENT_QUOTES) ?>"
+            <?php $oi_src = item_img($it['image'] ?? ''); ?>
+            <?php if ($oi_src): ?>
+            <img src="<?= h($oi_src) ?>"
+                 alt="<?= h($it['name']) ?>"
                  loading="lazy">
+            <?php else: ?>
+            <div class="order-item-no-img" aria-hidden="true"></div>
+            <?php endif; ?>
             <div class="order-item-info">
               <div class="order-item-name"><?= htmlspecialchars($it['name'], ENT_QUOTES) ?></div>
               <div class="order-item-qty"><?= (int)$it['quantity'] ?> шт.</div>
@@ -419,16 +573,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div><!-- /.checkout-layout -->
 </main>
 
+<!-- Mobile sticky checkout bar (hidden on desktop via CSS) -->
+<div class="checkout-sticky-bar">
+  <div class="checkout-sticky-total">
+    <span class="checkout-sticky-label">Сума:</span>
+    <span class="checkout-sticky-amount"><?= number_format($total, 0, ',', ' ') ?> ₴</span>
+  </div>
+  <button type="submit" form="checkoutForm" class="checkout-sticky-submit">
+    Оформити замовлення
+  </button>
+</div>
+
 <?php include '../includes/footer.php'; ?>
 
 <script>
 (function () {
   'use strict';
 
-
-  /* ────────────────────────────────────────────────
-     1. REVEAL ANIMATIONS
-  ──────────────────────────────────────────────── */
   const sections = document.querySelectorAll('.form-section');
   sections.forEach((s, i) => {
     setTimeout(() => s.classList.add('visible'), 100 + i * 110);
@@ -436,9 +597,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   const summaryBox = document.getElementById('checkoutSummaryBox');
   if (summaryBox) setTimeout(() => summaryBox.classList.add('visible'), 150);
 
-  /* ────────────────────────────────────────────────
-     2. PHONE MASK  →  +38 (0XX) XXX-XX-XX
-  ──────────────────────────────────────────────── */
   const phoneInput = document.getElementById('phone');
   if (phoneInput) {
     phoneInput.addEventListener('input', function () {
@@ -461,140 +619,497 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (phoneInput.value) phoneInput.dispatchEvent(new Event('input'));
   }
 
-  /* ────────────────────────────────────────────────
-     3. TIME CHIPS (schedule-aware)
-  ──────────────────────────────────────────────── */
   const schedule      = <?= $schedule_json ?>;
   const nextAvailable = <?= $next_json ?>;
+  const prepMinutes   = <?= $prepMinutes ?>;
+  const _userEmail    = <?= json_encode($user['email'] ?? $user['client_email'] ?? '') ?>;
 
-  const timeChipsEl  = document.getElementById('timeChips');
-  const timeCustomEl = document.getElementById('timeCustom');
-  const rtInput      = document.getElementById('readyTimeInput');
-  const rtHidden     = document.getElementById('readyTimeHidden');
+  const ITEM_H        = 44;
+  const rtHidden        = document.getElementById('readyTimeHidden');
+  const dtAsapBtn       = document.getElementById('dtAsapBtn');
+  const dtAsapTime      = document.getElementById('dtAsapTime');
+  const dtDayDrum       = document.getElementById('dtDayDrum');
+  const dtHourDrum      = document.getElementById('dtHourDrum');
+  const dtMinDrum       = document.getElementById('dtMinDrum');
+  const dtSummary       = document.getElementById('dtSummary');
+  const dtSummaryText   = document.getElementById('dtSummaryText');
+  const dtTravel        = document.getElementById('dtTravel');
+  const travelMinHidden = document.getElementById('travelMinHidden');
 
-  // Check if café is open at a given Date (dow: 1=Mon…7=Sun)
-  function isCafeOpenAt(date) {
-    const dow = date.getDay() === 0 ? 7 : date.getDay();
-    const day = schedule[dow];
-    if (!day) return false;
-    const [oh, om] = day.open.split(':').map(Number);
-    const [ch, cm] = day.close.split(':').map(Number);
-    const open  = new Date(date); open.setHours(oh, om, 0, 0);
-    const close = new Date(date); close.setHours(ch, cm, 0, 0);
-    return date >= open && date < close;
+  let travelMinutes = 15; // default travel time
+
+  function fmtTime(date) {
+    return String(date.getHours()).padStart(2,'0') + ':' + String(date.getMinutes()).padStart(2,'0');
   }
+  function fmtDate(date) {
+    return date.getFullYear() + '-'
+      + String(date.getMonth()+1).padStart(2,'0') + '-'
+      + String(date.getDate()).padStart(2,'0');
+  }
+  function isTodayStr(ds) { return ds === fmtDate(new Date()); }
+  function isToday(d)     { return fmtDate(d) === fmtDate(new Date()); }
+  function isTomorrow(d)  { const t=new Date(); t.setDate(t.getDate()+1); return fmtDate(d)===fmtDate(t); }
 
-  // Find next open 15-min slot at or after fromDate
-  function getNextOpenTime(fromDate) {
-    const d = new Date(fromDate);
-    // round up to next 15-min boundary
-    const rem = d.getMinutes() % 15;
-    if (rem !== 0) d.setMinutes(d.getMinutes() + (15 - rem));
-    d.setSeconds(0, 0);
-    for (let i = 0; i < 8 * 24 * 4; i++) {
-      if (isCafeOpenAt(d)) return d;
-      d.setMinutes(d.getMinutes() + 15);
-    }
+  function dayDrumLabel(date) {
+    if (isToday(date))    return 'Сьогодні';
+    if (isTomorrow(date)) return 'Завтра';
+    const wd = date.toLocaleDateString('uk-UA', {weekday:'short'});
+    return wd.charAt(0).toUpperCase() + wd.slice(1) + ' ' + date.getDate();
+  }
+  function dayLabel(date) {
+    if (isToday(date))    return 'Сьогодні';
+    if (isTomorrow(date)) return 'Завтра';
+    return date.toLocaleDateString('uk-UA', {weekday:'long', day:'numeric', month:'long'});
+  }
+  function isCafeOpenAt(date) {
+    const dow = date.getDay()===0 ? 7 : date.getDay();
+    const day = schedule[dow]; if (!day) return false;
+    const [oh,om]=day.open.split(':').map(Number), [ch,cm]=day.close.split(':').map(Number);
+    const open=new Date(date); open.setHours(oh,om,0,0);
+    const close=new Date(date); close.setHours(ch,cm,0,0);
+    return date>=open && date<close;
+  }
+  function findFirstOpenSlot(fromDate) {
+    const d=new Date(fromDate);
+    const rem=d.getMinutes()%15; if(rem!==0) d.setMinutes(d.getMinutes()+(15-rem));
+    d.setSeconds(0,0);
+    for(let i=0;i<14*24*4;i++) { if(isCafeOpenAt(d)) return new Date(d); d.setMinutes(d.getMinutes()+15); }
     return null;
   }
 
-  function fmtTime(date) {
-    return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+  // Earliest pickup = when kitchen CAN start (now if open, else next opening) + prepMinutes
+  function getEarliestReadyTime() {
+    const now = new Date();
+    let prepStart;
+    if (isCafeOpenAt(now)) {
+      prepStart = now;
+    } else {
+      // Scan for next opening moment (in 15-min steps)
+      const d = new Date(now);
+      const rem = d.getMinutes() % 15;
+      if (rem !== 0) d.setMinutes(d.getMinutes() + (15 - rem));
+      d.setSeconds(0, 0);
+      prepStart = null;
+      for (let i = 0; i < 14 * 24 * 4; i++) {
+        if (isCafeOpenAt(d)) { prepStart = new Date(d); break; }
+        d.setMinutes(d.getMinutes() + 15);
+      }
+      if (!prepStart) return new Date(9999, 0, 1);
+    }
+    return new Date(prepStart.getTime() + (prepMinutes + travelMinutes) * 60000);
   }
 
-  function isToday(date) {
-    const n = new Date();
-    return date.getDate() === n.getDate() && date.getMonth() === n.getMonth()
-        && date.getFullYear() === n.getFullYear();
+  function buildAvailableHours(dateStr) {
+    const [y,mo,dd] = dateStr.split('-').map(Number);
+    const dow = new Date(y,mo-1,dd).getDay()===0 ? 7 : new Date(y,mo-1,dd).getDay();
+    const conf = schedule[dow]; if (!conf) return [];
+    const [oh] = conf.open.split(':').map(Number);
+    const [ch] = conf.close.split(':').map(Number);
+    const minTime = isTodayStr(dateStr) ? getEarliestReadyTime() : new Date(0);
+    if (isTodayStr(dateStr)) minTime.setSeconds(0, 0);
+    const hours = [];
+    for (let h=oh; h<ch; h++) {
+      const hasSlot = [0,15,30,45].some(m => {
+        const slot = new Date(y,mo-1,dd,h,m,0);
+        return !isTodayStr(dateStr) || slot >= minTime;
+      });
+      if (hasSlot) hours.push(h);
+    }
+    return hours;
   }
 
-  function fmtDateLabel(date) {
-    if (isToday(date)) return '';
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
-    const checkDay    = new Date(date.getFullYear(),     date.getMonth(),     date.getDate());
-    if (checkDay.getTime() === tomorrowDay.getTime()) return 'завтра ';
-    return date.toLocaleDateString('uk-UA', {day: 'numeric', month: 'short'}) + ' ';
+  function buildAvailableMins(dateStr, hour) {
+    const [y,mo,dd] = dateStr.split('-').map(Number);
+    const minTime = isTodayStr(dateStr) ? getEarliestReadyTime() : new Date(0);
+    if (isTodayStr(dateStr)) minTime.setSeconds(0, 0);
+    return [0,15,30,45].filter(m => {
+      const slot = new Date(y,mo-1,dd,hour,m,0);
+      return !isTodayStr(dateStr) || slot >= minTime;
+    });
+  }
+
+  // Available days — only those with at least one open hour
+  const today = new Date();
+  const availableDays = [];
+  for (let i=0; i<=13; i++) {
+    const d = new Date(today); d.setDate(today.getDate()+i);
+    const dow = d.getDay()===0 ? 7 : d.getDay();
+    if (!schedule[dow]) continue;
+    const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    if (buildAvailableHours(ds).length > 0) availableDays.push(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+  }
+
+  // ── Drum state ──
+  let dayItems  = [];  // {label, dateStr}
+  let hourItems = [];  // {label, hour}
+  let minItems  = [];  // {label, min}
+  let selDayIdx  = 0;
+  let selHourIdx = 0;
+  let selMinIdx  = 0;
+  let asapActive  = false;
+  let _lock       = false;
+  let _rebuilding = 0;   // >0 while fillDrum/scrollDrumTo is mid-rebuild; blocks cascade events
+  let _animGen    = 0;   // increments each activateAsap() call; lets callbacks self-cancel
+
+  function curDateStr() { return dayItems[selDayIdx]?.dateStr || null; }
+  function curHour()    { return hourItems[selHourIdx]?.hour ?? null; }
+  function curMin()     { return minItems[selMinIdx]?.min ?? null; }
+
+  function fillDrum(drum, items) {
+    drum.innerHTML = '';
+    items.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'dt-drum-item';
+      el.textContent = item.label;
+      drum.appendChild(el);
+    });
+  }
+
+  function scrollDrumTo(drum, idx, smooth) {
+    drum.scrollTo({ top: Math.max(0, idx) * ITEM_H, behavior: smooth ? 'smooth' : 'instant' });
+  }
+
+  const _drumRaf = new WeakMap();
+  function animateDrumTo(drum, targetIdx, duration, onComplete) {
+    const prev = _drumRaf.get(drum);
+    if (prev) cancelAnimationFrame(prev);
+    const start = drum.scrollTop;
+    const end   = Math.max(0, targetIdx) * ITEM_H;
+    if (Math.abs(end - start) < 1) {
+      drum.style.scrollSnapType = '';
+      if (onComplete) onComplete();
+      return;
+    }
+    drum.style.scrollSnapType = 'none';
+    const t0 = performance.now();
+    const dur = duration || 260;
+    function ease(t) { return t < .5 ? 2*t*t : -1+(4-2*t)*t; }
+    function step(now) {
+      const p = Math.min((now - t0) / dur, 1);
+      drum.scrollTop = start + (end - start) * ease(p);
+      if (p < 1) {
+        _drumRaf.set(drum, requestAnimationFrame(step));
+      } else {
+        drum.scrollTop = end;
+        drum.style.scrollSnapType = '';
+        _drumRaf.delete(drum);
+        if (onComplete) onComplete();
+      }
+    }
+    _drumRaf.set(drum, requestAnimationFrame(step));
+  }
+
+  function rebuildHourDrum(dateStr, preferHour, noScroll) {
+    _rebuilding++;
+    const hours = buildAvailableHours(dateStr);
+    hourItems = hours.map(h => ({ label: String(h).padStart(2,'0'), hour: h }));
+    let idx = preferHour !== null ? hourItems.findIndex(x => x.hour === preferHour) : -1;
+    selHourIdx = idx < 0 ? 0 : idx;
+    fillDrum(dtHourDrum, hourItems);
+    if (!noScroll) scrollDrumTo(dtHourDrum, selHourIdx, false);
+    requestAnimationFrame(() => requestAnimationFrame(() => { _rebuilding = Math.max(0, _rebuilding - 1); }));
+  }
+
+  function rebuildMinDrum(dateStr, hour, preferMin, noScroll) {
+    _rebuilding++;
+    const mins = buildAvailableMins(dateStr, hour);
+    minItems = mins.map(m => ({ label: String(m).padStart(2,'0'), min: m }));
+    let idx = preferMin !== null ? minItems.findIndex(x => x.min === preferMin) : -1;
+    selMinIdx = idx < 0 ? 0 : idx;
+    fillDrum(dtMinDrum, minItems);
+    if (!noScroll) scrollDrumTo(dtMinDrum, selMinIdx, false);
+    requestAnimationFrame(() => requestAnimationFrame(() => { _rebuilding = Math.max(0, _rebuilding - 1); }));
+  }
+
+  function getAsapSlot() {
+    const ready = getEarliestReadyTime();
+    const rem = ready.getMinutes() % 15;
+    if (rem !== 0) ready.setMinutes(ready.getMinutes() + (15 - rem));
+    ready.setSeconds(0, 0);
+    return isCafeOpenAt(ready) ? ready : findFirstOpenSlot(ready);
+  }
+
+  function commit() {
+    const ds = curDateStr(), h = curHour(), m = curMin();
+    if (ds !== null && h !== null && m !== null) {
+      const ts = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      rtHidden.value = ds + ' ' + ts;
+      const [y,mo,dd] = ds.split('-').map(Number);
+      dtSummaryText.textContent = dayLabel(new Date(y,mo-1,dd)) + ' о ' + ts;
+      dtSummary.style.display = 'flex';
+      hideTimeMsg();
+      // Re-activate ASAP if manual selection matches the ASAP slot
+      if (!asapActive) {
+        const slot = getAsapSlot();
+        if (slot && fmtDate(slot) === ds && slot.getHours() === h && slot.getMinutes() === m) {
+          asapActive = true;
+          dtAsapBtn.classList.add('active');
+          dtAsapTime.textContent = '~' + ts;
+          if (dtTravel) dtTravel.classList.toggle('visible', isTodayStr(ds));
+        }
+      }
+    } else {
+      rtHidden.value = '';
+      dtSummary.style.display = 'none';
+    }
+    if (typeof enforcePrepayment === 'function') enforcePrepayment();
+    if (typeof updatePaymentUI   === 'function') updatePaymentUI();
+    updateEmailField();
+  }
+
+  function updateEmailField() {
+    const fgEmail    = document.getElementById('fg-email');
+    const emailInput = document.getElementById('customer_email');
+    if (!fgEmail || !emailInput) return;
+
+    const rtVal = rtHidden ? rtHidden.value.trim() : '';
+    let hoursAhead = 0;
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(rtVal)) {
+      const [ds, ts] = rtVal.split(' ');
+      const [y, mo, dd] = ds.split('-').map(Number);
+      const [h, m]      = ts.split(':').map(Number);
+      hoursAhead = (new Date(y, mo - 1, dd, h, m, 0) - new Date()) / 3_600_000;
+    }
+
+    const needsEmail = hoursAhead >= 3;
+    fgEmail.classList.toggle('fg-hidden', !needsEmail);
+    emailInput.disabled = !needsEmail;
+
+    if (needsEmail) {
+      if (!emailInput.value && _userEmail) emailInput.value = _userEmail;
+    } else {
+      emailInput.value = '';
+    }
   }
 
   function showTimeMsg(type, msg) {
     const el = document.getElementById('msg-time');
     if (!el) return;
-    el.textContent = (type === 'error' ? '⚠️ ' : 'ℹ️ ') + msg;
-    el.className = 'field-msg ' + (type === 'error' ? 'err' : 'info');
+    el.textContent = msg;
+    el.className = 'field-msg ' + (type==='error' ? 'err' : 'info');
   }
   function hideTimeMsg() {
     const el = document.getElementById('msg-time');
-    if (el) { el.textContent = ''; el.className = 'field-msg'; }
+    if (el) { el.textContent=''; el.className='field-msg'; }
   }
 
-  // Init hidden value from PHP-computed next available time
-  if (rtHidden && !rtHidden.value && nextAvailable) {
-    rtHidden.value = nextAvailable.time;
+  function listenDrum(drum, onIdxChange) {
+    const fire = () => {
+      if (_lock || _rebuilding > 0) return;
+      const count = drum.querySelectorAll('.dt-drum-item').length;
+      if (!count) return;
+      const idx = Math.max(0, Math.min(Math.round(drum.scrollTop / ITEM_H), count - 1));
+      onIdxChange(idx);
+    };
+    if ('onscrollend' in window) {
+      drum.addEventListener('scrollend', fire, {passive: true});
+    } else {
+      let t;
+      drum.addEventListener('scroll', () => {
+        if (_lock || _rebuilding > 0) return;
+        clearTimeout(t);
+        t = setTimeout(fire, 150);
+      }, {passive: true});
+    }
+
+    let _vel = 0, _pos = 0, _physRunning = false;
+    drum.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (_lock || _rebuilding > 0) return;
+
+      _vel += e.deltaY * 0.22;
+      const cap = ITEM_H * 2;
+      if (_vel >  cap) _vel =  cap;
+      if (_vel < -cap) _vel = -cap;
+
+      if (_physRunning) return;
+      _physRunning = true;
+      _pos = drum.scrollTop;
+      drum.style.scrollSnapType = 'none';
+      /* скасовуємо будь-яку кнопкову анімацію */
+      const prev = _drumRaf.get(drum);
+      if (prev) { cancelAnimationFrame(prev); _drumRaf.delete(drum); }
+
+      (function tick() {
+        const count  = drum.querySelectorAll('.dt-drum-item').length;
+        const maxPos = Math.max(0, count - 1) * ITEM_H;
+
+        _pos += _vel;
+        _vel *= 0.84;
+
+        /* відбій від країв */
+        if (_pos <= 0)      { _pos = 0;      if (_vel < 0) _vel = 0; }
+        if (_pos >= maxPos) { _pos = maxPos; if (_vel > 0) _vel = 0; }
+
+        drum.scrollTop = _pos;
+
+        if (Math.abs(_vel) < 0.6) {
+          /* пружний snap до найближчого елемента */
+          const snapIdx = Math.max(0, Math.min(Math.round(_pos / ITEM_H), count - 1));
+          const snapPos = snapIdx * ITEM_H;
+          const diff    = snapPos - _pos;
+          _vel += diff * 0.28;
+
+          if (Math.abs(diff) < 0.4 && Math.abs(_vel) < 0.4) {
+            drum.scrollTop  = snapPos;
+            drum.style.scrollSnapType = '';
+            _pos = snapPos; _vel = 0; _physRunning = false;
+            fire();
+            return;
+          }
+        }
+
+        requestAnimationFrame(tick);
+      })();
+    }, { passive: false });
   }
 
-  if (timeChipsEl) {
-    timeChipsEl.addEventListener('click', (e) => {
-      const chip = e.target.closest('.time-chip');
-      if (!chip) return;
+  function _finishAsap(ds, h, m, ts) {
+    asapActive = true;
+    dtAsapBtn.classList.add('active');
+    dtAsapTime.textContent = '~' + ts;
+    rtHidden.value = ds + ' ' + ts;
+    const [y,mo,dd] = ds.split('-').map(Number);
+    dtSummaryText.textContent = dayLabel(new Date(y,mo-1,dd)) + ' о ' + ts;
+    dtSummary.style.display = 'flex';
+    hideTimeMsg();
+    if (dtTravel) dtTravel.classList.toggle('visible', isTodayStr(ds));
+    if (typeof enforcePrepayment === 'function') enforcePrepayment();
+    if (typeof updatePaymentUI   === 'function') updatePaymentUI();
+    updateEmailField();
+  }
 
-      document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      hideTimeMsg();
+  // Instant (no animation) — used on page load so the lock doesn't block early interaction
+  function applyAsapInstant() {
+    const slot = getAsapSlot();
+    if (!slot) { showTimeMsg('error','Кафе зачинене найближчим часом.'); return; }
+    const ds = fmtDate(slot), h = slot.getHours(), m = slot.getMinutes();
+    const ts = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+    const di = dayItems.findIndex(x => x.dateStr === ds);
+    if (di < 0) return;
+    selDayIdx = di;
+    scrollDrumTo(dtDayDrum, di, false);
+    rebuildHourDrum(ds, h, false);
+    rebuildMinDrum(ds, h, m, false);
+    // Defer so enforcePrepayment/updatePaymentUI are initialized before being called
+    setTimeout(() => _finishAsap(ds, h, m, ts), 0);
+  }
 
-      const offset = chip.dataset.offset;
+  function activateAsap() {
+    const slot = getAsapSlot();
+    if (!slot) { showTimeMsg('error','Кафе зачинене найближчим часом.'); return; }
 
-      if (offset === 'custom') {
-        timeCustomEl.classList.add('show');
-        rtHidden.value = rtInput ? rtInput.value : '';
-        return;
-      }
+    const ds = fmtDate(slot);
+    const h  = slot.getHours();
+    const m  = slot.getMinutes();
+    const ts = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+    const di = dayItems.findIndex(x => x.dateStr === ds);
+    if (di < 0) return;
 
-      timeCustomEl.classList.remove('show');
+    const gen = ++_animGen;   // capture this animation's generation
+    _lock = true;
+    selDayIdx = di;
 
-      if (offset === '15') {
-        // "Якнайшвидше"
-        if (!nextAvailable) {
-          showTimeMsg('error', 'Кафе зачинене найближчим часом. Оберіть час вручну.');
-          rtHidden.value = '';
-          return;
-        }
-        rtHidden.value = nextAvailable.time;
-        if (!nextAvailable.is_today) {
-          showTimeMsg('info', 'Кафе відчиняється: ' + nextAvailable.label + ' о ' + nextAvailable.time);
-        }
-      } else {
-        // "+30 хв" or "+1 год"
-        const mins = parseInt(offset, 10);
-        const target = new Date();
-        target.setMinutes(target.getMinutes() + mins);
-
-        const available = getNextOpenTime(target);
-        if (!available) {
-          showTimeMsg('error', 'Немає доступного часу найближчим часом.');
-          rtHidden.value = '';
-          return;
-        }
-
-        rtHidden.value = fmtTime(available);
-
-        if (!isToday(available)) {
-          showTimeMsg('info', 'Найближчий час: ' + fmtDateLabel(available) + fmtTime(available));
-        }
-      }
+    // Step 1: animate day drum to target
+    animateDrumTo(dtDayDrum, di, 380, () => {
+      if (_animGen !== gen) return;
+      // Step 2: fade out hour + min drums while content is being replaced
+      dtHourDrum.classList.add('dt-drum--fading');
+      dtMinDrum.classList.add('dt-drum--fading');
+      setTimeout(() => {
+        if (_animGen !== gen) return;
+        // Step 3: rebuild content while drums are faded (invisible)
+        rebuildHourDrum(ds, h, true);
+        rebuildMinDrum(ds, h, m, true);
+        // Step 4: fade back in, then animate to correct positions
+        dtHourDrum.classList.remove('dt-drum--fading');
+        dtMinDrum.classList.remove('dt-drum--fading');
+        animateDrumTo(dtHourDrum, selHourIdx, 300, () => {
+          if (_animGen !== gen) return;
+          animateDrumTo(dtMinDrum, selMinIdx, 240, () => {
+            if (_animGen !== gen) return;
+            _lock = false;
+            _finishAsap(ds, h, m, ts);
+          });
+        });
+      }, 160); // wait for fade-out transition (150ms CSS + small buffer)
     });
   }
 
-  if (rtInput) {
-    rtInput.addEventListener('change', function () {
-      rtHidden.value = this.value;
-      validateTime();
-    });
+  function initDrums() {
+    dayItems = availableDays.map(d => ({ label: dayDrumLabel(d), dateStr: fmtDate(d) }));
+    fillDrum(dtDayDrum, dayItems);
+
+    // Restore from hidden (POST error case)
+    const val = rtHidden ? rtHidden.value.trim() : '';
+    if (val && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+      const [ds, ts] = val.split(' ');
+      const [h, m] = ts.split(':').map(Number);
+      const di = dayItems.findIndex(x => x.dateStr === ds);
+      selDayIdx = di >= 0 ? di : 0;
+      scrollDrumTo(dtDayDrum, selDayIdx, false);
+      rebuildHourDrum(ds, h);
+      rebuildMinDrum(ds, h, m);
+      commit();
+    } else {
+      applyAsapInstant();
+    }
   }
 
-  /* ────────────────────────────────────────────────
-     4. REAL-TIME VALIDATION
-  ──────────────────────────────────────────────── */
+  if (dtDayDrum && dtHourDrum && dtMinDrum && dtAsapBtn) {
+    initDrums();
+    updateEmailField();
+
+    listenDrum(dtDayDrum, idx => {
+      if (idx === selDayIdx) return;
+      selDayIdx = idx;
+      asapActive = false;
+      dtAsapBtn.classList.remove('active');
+      if (dtTravel) dtTravel.classList.remove('visible');
+      const ds = curDateStr(); if (!ds) return;
+      rebuildHourDrum(ds, curHour());
+      rebuildMinDrum(ds, curHour(), curMin());
+      commit();
+    });
+
+    listenDrum(dtHourDrum, idx => {
+      if (idx === selHourIdx) return;
+      selHourIdx = idx;
+      asapActive = false;
+      dtAsapBtn.classList.remove('active');
+      if (dtTravel) dtTravel.classList.remove('visible');
+      const ds = curDateStr(), h = curHour();
+      if (ds && h !== null) {
+        rebuildMinDrum(ds, h, curMin());
+      }
+      commit();
+    });
+
+    listenDrum(dtMinDrum, idx => {
+      if (idx === selMinIdx) return;
+      selMinIdx = idx;
+      asapActive = false;
+      dtAsapBtn.classList.remove('active');
+      if (dtTravel) dtTravel.classList.remove('visible');
+      commit();
+    });
+
+    dtAsapBtn.addEventListener('click', activateAsap);
+
+    // Travel time chips
+    if (dtTravel) {
+      dtTravel.querySelectorAll('.dt-travel-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          dtTravel.querySelectorAll('.dt-travel-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          travelMinutes = parseInt(chip.dataset.min, 10);
+          if (travelMinHidden) travelMinHidden.value = travelMinutes;
+          activateAsap();
+        });
+      });
+    }
+  }
+
   function setField(fgId, msgId, state, text) {
     const fg  = document.getElementById(fgId);
     const msg = document.getElementById(msgId);
@@ -633,12 +1148,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 
   function validateTime() {
-    const val = rtHidden ? rtHidden.value : '';
-    if (!val) {
-      setField('fg-time', 'msg-time', 'error', 'Оберіть час отримання');
+    const val = rtHidden ? rtHidden.value.trim() : '';
+    if (!val || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+      const el = document.getElementById('msg-time');
+      if (el) { el.textContent = 'Оберіть дату та час отримання'; el.className = 'field-msg err'; }
       return false;
     }
-    setField('fg-time', 'msg-time', 'valid', '');
+    const el = document.getElementById('msg-time');
+    if (el) { el.textContent = ''; el.className = 'field-msg'; }
     return true;
   }
 
@@ -659,18 +1176,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (fnEl) fnEl.addEventListener('blur', () => validateName('first_name', 'fg-first', 'msg-first'));
   if (lnEl) lnEl.addEventListener('blur', () => validateName('last_name',  'fg-last',  'msg-last'));
   if (phoneInput) phoneInput.addEventListener('blur', validatePhone);
-  const liqpayInfo = document.getElementById('liqpayInfo');
+  const liqpayInfo    = document.getElementById('liqpayInfo');
   const checkoutBtnEl = document.getElementById('checkoutBtn');
+  const cashCard      = document.querySelector('.payment-card:has(input[value="cash_on_pickup"])');
+  const cashInput     = document.querySelector('input[name="payment"][value="cash_on_pickup"]');
+  const cardInput     = document.querySelector('input[name="payment"][value="card_online"]');
+  const advanceNote   = (() => {
+    const el = document.createElement('p');
+    el.id = 'advancePayNote';
+    el.style.cssText = 'font-size:12px;color:#b07840;margin:10px 0 0;display:none;line-height:1.5';
+    el.textContent = '⚠ Замовлення на майбутній день приймаються лише з онлайн-оплатою карткою.';
+    const cards = document.getElementById('paymentCards');
+    if (cards) cards.after(el);
+    return el;
+  })();
+
+  function isAdvanceOrder() {
+    const val = rtHidden ? rtHidden.value.trim() : '';
+    if (!val) return false;
+    return val.slice(0, 10) > fmtDate(new Date());
+  }
+
+  function enforcePrepayment() {
+    const advance = isAdvanceOrder();
+    if (cashCard) {
+      cashCard.style.opacity    = advance ? '0.4' : '';
+      cashCard.style.pointerEvents = advance ? 'none' : '';
+    }
+    advanceNote.style.display = advance ? '' : 'none';
+    if (advance && cashInput && cashInput.checked) {
+      cashInput.checked = false;
+      if (cardInput) { cardInput.checked = true; }
+    }
+  }
 
   function updatePaymentUI() {
     const chosen = document.querySelector('input[name="payment"]:checked');
     const isCard = chosen && chosen.value === 'card_online';
 
-    // Toggle LiqPay info block
     if (liqpayInfo) {
       liqpayInfo.classList.toggle('show', isCard);
     }
-    // Change button text
     if (checkoutBtnEl) {
       checkoutBtnEl.textContent = isCard
         ? 'Перейти до оплати →'
@@ -684,6 +1230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   // Run on load in case payment is pre-selected
   updatePaymentUI();
+  enforcePrepayment();
 
   // Textarea: floating label + auto-grow (no resize handle)
   const commentEl = document.getElementById('comment');
@@ -701,9 +1248,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     growComment();
   }
 
-  /* ────────────────────────────────────────────────
-     5. FORM SUBMIT
-  ──────────────────────────────────────────────── */
   const checkoutForm = document.getElementById('checkoutForm');
   const checkoutBtn  = document.getElementById('checkoutBtn');
 
@@ -713,28 +1257,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         validateName('first_name', 'fg-first', 'msg-first'),
         validateName('last_name',  'fg-last',  'msg-last'),
         validatePhone(),
+        validateTime(),
         validatePayment(),
       ].every(Boolean);
 
       if (!ok) {
         e.preventDefault();
-        // Scroll to first error
-        const firstErr = document.querySelector('.co-error input, .co-error textarea');
+        const firstErr = document.querySelector('.field-msg.err, .co-error input, .co-error textarea');
         if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
-      // Refresh time right before submit in case time has passed
-      const activeChip = document.querySelector('.time-chip.active');
-      if (activeChip && activeChip.dataset.offset !== 'custom') {
-        const off = parseInt(activeChip.dataset.offset, 10);
-        if (off === 15) {
-          if (nextAvailable) rtHidden.value = nextAvailable.time;
-        } else {
-          const target = new Date();
-          target.setMinutes(target.getMinutes() + off);
-          const snapped = getNextOpenTime(target);
-          if (snapped) rtHidden.value = fmtTime(snapped);
+      // Якщо активний режим "Якнайшвидше" — перераховуємо слот прямо перед відправкою
+      // (на випадок якщо минув час поки заповнювалась форма)
+      if (asapActive) {
+        const freshReady = getEarliestReadyTime();
+        const freshRem = freshReady.getMinutes() % 15;
+        if (freshRem !== 0) freshReady.setMinutes(freshReady.getMinutes() + (15 - freshRem));
+        freshReady.setSeconds(0, 0);
+        const fresh = isCafeOpenAt(freshReady) ? freshReady : findFirstOpenSlot(freshReady);
+        if (fresh) {
+          rtHidden.value = fmtDate(fresh) + ' ' + fmtTime(fresh);
         }
       }
 
@@ -745,17 +1288,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     });
   }
 
-  /* ────────────────────────────────────────────────
-     6. BFCACHE FIX
-     If browser restores this page from cache (e.g. after back button),
-     redirect to cart immediately — cart is likely empty after an order.
-  ──────────────────────────────────────────────── */
   window.addEventListener('pageshow', function (e) {
-    if (e.persisted) {
+    // При поверненні через bfcache після готівкового замовлення (корзина вже пуста)
+    // редиректимо на кошик. Але якщо є pending card order — не редиректимо.
+    if (e.persisted && !<?= !empty($_SESSION['pending_order_id']) ? 'true' : 'false' ?>) {
       window.location.replace('cart.php');
     }
   });
 
+})();
+
+(function () {
+  var otBtns = Array.from(document.querySelectorAll('.ot-btn'));
+  var otInput = document.getElementById('orderTypeInput');
+  otBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      otBtns.forEach(function (b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      if (otInput) otInput.value = this.dataset.type;
+    });
+  });
 })();
 </script>
 </body>

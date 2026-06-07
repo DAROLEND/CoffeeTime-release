@@ -5,30 +5,30 @@ require_once __DIR__ . '/auth_check.php';
 $pageTitle  = 'Додати товар';
 $activePage = 'products';
 
-$allowed = ['coffee_items','fast_food_items','pizza_items','cold_drink_items','dessert_items','giftcards','sushi_items','sushi_sets','salad_items','cake_items'];
+$allowed = ['coffee_items','fast_food_items','pizza_items','mini_pizza_items','cold_drink_items','ice_cream_items','dessert_items','sushi_items','sushi_sets','salad_items','cake_items'];
 $categoryNames = [
-    'coffee_items'     => 'Кава',
-    'fast_food_items'  => 'Фаст-фуд',
-    'pizza_items'      => 'Піца',
-    'cold_drink_items' => 'Холодні напої',
-    'dessert_items'    => 'Десерти',
-    'giftcards'        => 'Подарункові картки',
-    'sushi_items'      => 'Суші',
-    'sushi_sets'       => 'Сети суші',
-    'salad_items'      => 'Салати',
-    'cake_items'       => 'Торти на замовлення',
+    'coffee_items'      => 'Кава',
+    'fast_food_items'   => 'Фаст-фуд',
+    'pizza_items' => 'Піца', 'mini_pizza_items' => 'Міні-піца',
+    'cold_drink_items'  => 'Холодні напої',
+    'ice_cream_items'   => 'Морозиво',
+    'dessert_items'     => 'Десерти',
+    'sushi_items'       => 'Суші',
+    'sushi_sets'        => 'Сети суші',
+    'salad_items'       => 'Салати',
+    'cake_items'        => 'Торти на замовлення',
 ];
 $categoryFolders = [
-    'coffee_items'     => 'coffee',
-    'cold_drink_items' => 'cold_drinks',
-    'dessert_items'    => 'desserts',
-    'fast_food_items'  => 'fast_food',
-    'pizza_items'      => 'pizza',
-    'giftcards'        => 'giftcards',
-    'sushi_items'      => 'sushi',
-    'sushi_sets'       => 'sushi',
-    'salad_items'      => 'salads',
-    'cake_items'       => 'cakes',
+    'coffee_items'      => 'coffee',
+    'cold_drink_items'  => 'cold_drinks',
+    'ice_cream_items'   => 'ice_cream',
+    'dessert_items'     => 'desserts',
+    'fast_food_items'   => 'fast_food',
+    'pizza_items' => 'pizza', 'mini_pizza_items' => 'mini_pizza',
+    'sushi_items'       => 'sushi',
+    'sushi_sets'        => 'sushi',
+    'salad_items'       => 'salads',
+    'cake_items'        => 'cakes',
 ];
 
 $category = $_GET['category'] ?? '';
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($price <= 0) $errors[] = 'Ціна має бути більша за 0.';
     }
     $imageOptional = ($isCake === false);
-    $hasImage = isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK;
+    $hasImage = (!empty($_POST['image_b64'])) || (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK);
     if (!$hasImage) $errors[] = 'Оберіть зображення для завантаження.';
 
     if (empty($errors)) {
@@ -65,30 +65,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uploadDir = __DIR__ . '/../static/images/menu_items/' . $subfolder . '/';
         if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
-        $ext         = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
-        $allowed_ext = ['jpg','jpeg','png','webp','gif'];
-        if (!in_array($ext, $allowed_ext)) {
-            $errors[] = 'Дозволені формати: JPG, PNG, WebP, GIF.';
+        $imagePath = '';
+        if (!empty($_POST['image_b64'])) {
+            $fname = uniqid('item_', true);
+            $ext   = save_cropped_image($_POST['image_b64'], $uploadDir . $fname . '.jpg');
+            if ($ext) $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fname . '.' . $ext;
+            else $errors[] = 'Помилка збереження зображення.';
         } else {
-            $fileName   = uniqid('item_', true) . '.' . $ext;
-            $targetPath = $uploadDir . $fileName;
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
-                $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fileName;
-                if ($isCake) {
-                    $stmt = $conn->prepare("INSERT INTO cake_items (name, description, price_per_kg, min_weight, image) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->bind_param("ssdds", $name, $desc, $pricePerKg, $minWeight, $imagePath);
-                } else {
-                    $nameCol = ($category === 'giftcards') ? 'title' : 'name';
-                    $stmt = $conn->prepare("INSERT INTO `$category` (`$nameCol`, description, price, image) VALUES (?, ?, ?, ?)");
-                    $stmt->bind_param("ssds", $name, $desc, $price, $imagePath);
-                }
-                $stmt->execute();
-                $stmt->close();
-                header("Location: manage_items.php?category=$category&saved=1");
-                exit;
+            $ext         = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            $allowed_ext = ['jpg','jpeg','png','webp','gif'];
+            if (!in_array($ext, $allowed_ext)) {
+                $errors[] = 'Дозволені формати: JPG, PNG, WebP, GIF.';
             } else {
-                $errors[] = 'Не вдалося зберегти зображення.';
+                $fileName = uniqid('item_', true) . '.' . $ext;
+                if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $fileName))
+                    $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fileName;
+                else
+                    $errors[] = 'Не вдалося зберегти зображення.';
             }
+        }
+
+        if ($imagePath && empty($errors)) {
+            if ($isCake) {
+                $stmt = $conn->prepare("INSERT INTO cake_items (name, description, price_per_kg, min_weight, image) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssdds", $name, $desc, $pricePerKg, $minWeight, $imagePath);
+            } elseif ($category === 'ice_cream_items') {
+                $diff2 = floatval($_POST['scoop_diff_2'] ?? 0);
+                $diff3 = floatval($_POST['scoop_diff_3'] ?? 0);
+                $variantOptions = json_encode([
+                    'type'  => 'scoops', 'label' => 'Кількість кульок',
+                    'options' => [
+                        ['id'=>'1','label'=>'1 кулька', 'price_diff'=>0],
+                        ['id'=>'2','label'=>'2 кульки','price_diff'=>$diff2],
+                        ['id'=>'3','label'=>'3 кульки','price_diff'=>$diff3],
+                    ]
+                ]);
+                $stmt = $conn->prepare("INSERT INTO ice_cream_items (name, description, price, variant_options, image) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssdss", $name, $desc, $price, $variantOptions, $imagePath);
+            } else {
+                $stmt = $conn->prepare("INSERT INTO `$category` (name, description, price, image) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("ssds", $name, $desc, $price, $imagePath);
+            }
+            $stmt->execute();
+            $stmt->close();
+            header("Location: manage_items.php?category=$category&saved=1");
+            exit;
         }
     }
 }
@@ -148,8 +169,9 @@ include 'includes/layout_top.php';
 
     <div class="form-group">
       <label class="form-label">Зображення *</label>
+      <input type="hidden" name="image_b64" id="image_b64">
       <div class="upload-zone">
-        <input type="file" name="image" accept="image/*" required>
+        <input type="file" name="image" accept="image/*" data-crop-hidden="image_b64">
         <div class="upload-hint">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c49a6c" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Клікніть або перетягніть фото</span>

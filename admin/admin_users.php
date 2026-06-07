@@ -12,16 +12,21 @@ $flash = ''; $flashType = 'success';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    /* ── CREATE ── */
     if ($action === 'create') {
         $username    = trim($_POST['username']     ?? '');
         $displayName = trim($_POST['display_name'] ?? '');
         $password    = $_POST['password']          ?? '';
         $perms       = array_keys(array_filter($_POST['perms'] ?? []));
 
+        /* auto-add orders_view if orders_edit is selected */
+        if (in_array('orders_edit', $perms) && !in_array('orders_view', $perms)) {
+            $perms[] = 'orders_view';
+        }
+
         $err = '';
         if (strlen($username) < 3)   $err = 'Логін мінімум 3 символи.';
         if (strlen($password) < 6)   $err = $err ?: 'Пароль мінімум 6 символів.';
+        if (empty($perms))           $err = $err ?: 'Оберіть принаймні одне право доступу.';
 
         if (!$err) {
             $chk = $conn->prepare("SELECT id FROM admin_users WHERE username=?");
@@ -46,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    /* ── MY ACCOUNT (super edits own profile/password) ── */
     if ($action === 'my_account') {
         $displayName = trim($_POST['display_name'] ?? '');
         $newPass     = $_POST['new_password']      ?? '';
@@ -83,11 +87,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    /* ── EDIT PERMISSIONS ── */
     if ($action === 'edit') {
         $id          = (int)($_POST['id'] ?? 0);
         $displayName = trim($_POST['display_name'] ?? '');
         $perms       = array_keys(array_filter($_POST['perms'] ?? []));
+        /* auto-add orders_view if orders_edit is selected */
+        if (in_array('orders_edit', $perms) && !in_array('orders_view', $perms)) {
+            $perms[] = 'orders_view';
+        }
         $permsJson   = json_encode($perms);
         $newPass     = $_POST['new_password'] ?? '';
 
@@ -119,7 +126,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    /* ── DELETE ── */
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
         /* Cannot delete yourself or other supers */
@@ -212,7 +218,7 @@ include 'includes/layout_top.php';
 <!-- ══ CREATE FORM ══ -->
 <div class="panel" style="margin-bottom:28px">
   <div class="panel-head"><h2 class="panel-title">Додати акаунт персоналу</h2></div>
-  <form method="post" class="au-form">
+  <form method="post" class="au-form" id="createForm">
     <input type="hidden" name="action" value="create">
 
     <div class="au-row2">
@@ -234,7 +240,7 @@ include 'includes/layout_top.php';
     </div>
 
     <div class="au-field">
-      <label>Права доступу</label>
+      <label>Права доступу <span style="color:#e53935">*</span></label>
       <div class="perm-grid">
         <?php foreach ($allPerms as $key => $label): ?>
           <label class="perm-check">
@@ -243,6 +249,7 @@ include 'includes/layout_top.php';
           </label>
         <?php endforeach; ?>
       </div>
+      <div id="createPermError" class="perm-error" style="display:none">Оберіть принаймні одне право доступу</div>
     </div>
 
     <button type="submit" class="btn btn-primary">+ Створити акаунт</button>
@@ -311,7 +318,7 @@ include 'includes/layout_top.php';
   <div class="modal-box" style="max-width:520px">
     <button class="modal-close" onclick="closeModal('editModal')">✕</button>
     <h3 style="font-size:16px;font-weight:700;color:#2c2c2a;margin-bottom:20px">Редагувати акаунт</h3>
-    <form method="post" class="au-form">
+    <form method="post" class="au-form" id="editModalForm">
       <input type="hidden" name="action" value="edit">
       <input type="hidden" name="id" id="editUserId">
 
@@ -332,7 +339,7 @@ include 'includes/layout_top.php';
       </div>
 
       <div class="au-field">
-        <label>Права доступу</label>
+        <label>Права доступу <span style="color:#e53935">*</span></label>
         <div class="perm-grid" id="editPermGrid">
           <?php foreach ($allPerms as $key => $label): ?>
             <label class="perm-check">
@@ -341,6 +348,7 @@ include 'includes/layout_top.php';
             </label>
           <?php endforeach; ?>
         </div>
+        <div id="editPermError" class="perm-error" style="display:none">Оберіть принаймні одне право доступу</div>
       </div>
 
       <div style="display:flex;gap:10px;margin-top:4px">
@@ -369,6 +377,7 @@ include 'includes/layout_top.php';
 .au-field input:focus { border-color:#8B4513; }
 
 /* Permissions grid */
+.perm-error { font-size:12px; color:#e53935; margin-top:8px; }
 .perm-grid { display:flex; flex-direction:column; gap:8px; margin-top:2px; }
 .perm-check {
   display:flex; align-items:center; gap:10px;
@@ -416,6 +425,20 @@ include 'includes/layout_top.php';
 
 .au-actions { display:flex; gap:8px; flex-shrink:0; align-items:center; }
 
+@media (max-width: 600px) {
+  .au-row { flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+  .au-info { flex-basis: calc(100% - 56px); } /* 40px avatar + 16px gap */
+  .au-actions {
+    width: 100%;
+    padding-left: 50px; /* indent to align with text */
+    margin-top: 2px;
+  }
+  .au-field input[type="text"],
+  .au-field input[type="password"],
+  .pw-wrap input { font-size: 16px; }
+  .modal-box { width: 92vw; padding: 20px 16px; }
+}
+
 /* Password wrap */
 .pw-wrap { position:relative; }
 .pw-wrap input { width:100%; padding:10px 40px 10px 14px; font-size:14px; border:1.5px solid #e0d8d0; border-radius:10px; outline:none; font-family:inherit; transition:border-color .2s; }
@@ -447,7 +470,7 @@ include 'includes/layout_top.php';
 </style>
 
 <script>
-/* Eye toggle for password fields */
+/* Eye toggle */
 document.querySelectorAll('.eye-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var inp = document.getElementById(this.dataset.target);
@@ -457,15 +480,78 @@ document.querySelectorAll('.eye-btn').forEach(function(btn) {
   });
 });
 
+function wirePermDeps(container) {
+  var editCb = container.querySelector('input[name="perms[orders_edit]"]');
+  var viewCb = container.querySelector('input[name="perms[orders_view]"]');
+  if (!editCb || !viewCb) return;
+
+  function syncView() {
+    if (editCb.checked) {
+      viewCb.checked  = true;
+      viewCb.disabled = true;
+      viewCb.closest('.perm-check').title = 'Автоматично увімкнено разом із «Змінювати статус»';
+      viewCb.closest('.perm-check').style.opacity = '0.6';
+    } else {
+      viewCb.disabled = false;
+      viewCb.closest('.perm-check').title = '';
+      viewCb.closest('.perm-check').style.opacity = '';
+    }
+  }
+  editCb.addEventListener('change', syncView);
+  syncView();
+}
+
+function validatePerms(form, errorId) {
+  var grid    = form.querySelector('.perm-grid');
+  var checked = grid ? grid.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)') : [];
+  var enabledChecked = 0;
+  grid && grid.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+    if (cb.checked) enabledChecked++;
+  });
+  var errEl = document.getElementById(errorId);
+  if (enabledChecked === 0) {
+    if (errEl) { errEl.style.display = 'block'; }
+    grid && grid.style && (grid.style.outline = '2px solid #e53935');
+    grid && grid.style && (grid.style.borderRadius = '8px');
+    return false;
+  }
+  if (errEl) { errEl.style.display = 'none'; }
+  grid && grid.style && (grid.style.outline = '');
+  return true;
+}
+
+/* Wire create form */
+(function() {
+  var form = document.getElementById('createForm');
+  if (!form) return;
+  wirePermDeps(form);
+  form.addEventListener('submit', function(e) {
+    if (!validatePerms(form, 'createPermError')) e.preventDefault();
+  });
+})();
+
+/* Wire edit form validation */
+(function() {
+  var form = document.getElementById('editModalForm');
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    if (!validatePerms(form, 'editPermError')) e.preventDefault();
+  });
+})();
+
+/* Wire edit modal */
 function openEditModal(u) {
   document.getElementById('editUserId').value      = u.id;
   document.getElementById('editUsername').value    = u.username;
   document.getElementById('editDisplayName').value = u.display_name || '';
 
-  document.querySelectorAll('#editPermGrid input[data-perm]').forEach(function(cb) {
-    cb.checked = (u.perms_arr || []).indexOf(cb.dataset.perm) !== -1;
+  var grid = document.getElementById('editPermGrid');
+  grid.querySelectorAll('input[data-perm]').forEach(function(cb) {
+    cb.checked  = (u.perms_arr || []).indexOf(cb.dataset.perm) !== -1;
+    cb.disabled = false;
   });
 
+  wirePermDeps(grid.closest('form') || document.getElementById('editModalForm'));
   openModal('editModal');
 }
 </script>

@@ -1,19 +1,4 @@
 <?php
-/**
- * Coffee Time — Admin authentication gate
- *
- * Include at the top of EVERY admin/*.php file (after db.php):
- *
- *   require_once __DIR__ . '/auth_check.php';
- *
- * This file:
- *  1. Starts/joins the session securely
- *  2. Checks $_SESSION['admin'] is set
- *  3. Verifies the username still exists in admin_users
- *  4. Loads role + permissions into session
- *  5. For AJAX requests returns JSON 401; for normal requests redirects to login
- */
-
 if (session_status() === PHP_SESSION_NONE) {
     $cp = session_get_cookie_params();
     session_set_cookie_params([
@@ -29,7 +14,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/* ── Migrate admin_users table if needed ── */
 if (isset($conn)) {
     $cols = [];
     $r = $conn->query("SHOW COLUMNS FROM admin_users");
@@ -51,7 +35,6 @@ if (isset($conn)) {
 $_isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 
-/* ── 1. Session check ── */
 if (empty($_SESSION['admin'])) {
     if ($_isAjax) {
         http_response_code(401);
@@ -63,7 +46,6 @@ if (empty($_SESSION['admin'])) {
     exit;
 }
 
-/* ── 2. DB verification + load role/perms ── */
 if (!isset($conn)) {
     error_log('[auth_check] $conn not available');
     http_response_code(500);
@@ -72,6 +54,10 @@ if (!isset($conn)) {
 
 $_adminUsername = $_SESSION['admin'];
 $_as = $conn->prepare("SELECT username, role, permissions, display_name FROM admin_users WHERE username = ? LIMIT 1");
+if (!$_as) {
+    $_as = $conn->prepare("SELECT username, role, permissions FROM admin_users WHERE username = ? LIMIT 1");
+}
+if (!$_as) { http_response_code(500); exit; }
 $_as->bind_param('s', $_adminUsername);
 $_as->execute();
 $_adminRow = $_as->get_result()->fetch_assoc();
@@ -89,7 +75,6 @@ if (!$_adminRow) {
     exit;
 }
 
-/* Store role + permissions in session (refresh every request) */
 $_SESSION['admin_role']  = $_adminRow['role'] ?? 'staff';
 $_SESSION['admin_perms'] = json_decode($_adminRow['permissions'] ?? '[]', true) ?: [];
 if (!empty($_adminRow['display_name'])) {

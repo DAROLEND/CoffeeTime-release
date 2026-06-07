@@ -16,11 +16,11 @@ if (!$orderId || (int)($_SESSION['pending_order_id'] ?? 0) !== $orderId) {
     exit;
 }
 
-$stmt = $pdo->prepare(
-    "SELECT payment_status FROM orders WHERE order_id = ? LIMIT 1"
-);
-$stmt->execute([$orderId]);
-$order = $stmt->fetch(PDO::FETCH_ASSOC);
+$stmt = $conn->prepare("SELECT payment_status FROM orders WHERE order_id = ? LIMIT 1");
+$stmt->bind_param('i', $orderId);
+$stmt->execute();
+$order = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
 if (!$order) {
     echo json_encode(['status' => 'unknown']);

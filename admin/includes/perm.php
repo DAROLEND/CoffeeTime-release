@@ -1,13 +1,4 @@
 <?php
-/**
- * Permission helpers.
- * Relies on $_SESSION['admin_role'] and $_SESSION['admin_perms'] (array)
- * set by auth_check.php after successful login verification.
- *
- * Roles:   'super' | 'staff'
- * Perms:   'orders_view' | 'orders_edit' | 'products' | 'content' | 'reviews'
- */
-
 function is_super(): bool {
     return ($_SESSION['admin_role'] ?? '') === 'super';
 }
@@ -17,10 +8,6 @@ function has_perm(string $perm): bool {
     return in_array($perm, $_SESSION['admin_perms'] ?? [], true);
 }
 
-/**
- * Hard-gate: redirect to dashboard with error if permission missing.
- * Call at the top of any admin page after auth_check.php.
- */
 function require_perm(string $perm): void {
     if (!has_perm($perm)) {
         $_SESSION['admin_flash']      = 'У вас немає доступу до цього розділу.';
@@ -39,7 +26,6 @@ function require_super(): void {
     }
 }
 
-/** All defined permissions with human labels */
 function all_perms(): array {
     return [
         'orders_view'  => 'Переглядати замовлення',

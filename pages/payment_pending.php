@@ -95,6 +95,11 @@ $failureUrl = SITE_URL . '/pages/payment_failure.php?order_id=' . $orderId;
       margin-top: 4px;
     }
     .btn-back:hover { text-decoration: underline; }
+    @media (max-width: 480px) {
+      .pending-wrap { margin: 40px auto 60px; padding: 0 16px; }
+      .pending-icon { width: 64px; height: 64px; font-size: 30px; }
+      .pending-wrap h1 { font-size: 22px; }
+    }
     #statusMsg {
       font-size: 13px;
       color: #1565c0;

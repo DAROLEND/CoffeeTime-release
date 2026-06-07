@@ -3,7 +3,6 @@ require_once __DIR__ . '/../db/db.php';
 require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
-/* ── Only allow GET ─────────────────────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
     exit;
@@ -43,7 +42,6 @@ if ($exitCode !== 0 || !file_exists($tmpFile)) {
     exit;
 }
 
-/* ── Stream file to browser then delete ─────────────────────────────────────── */
 header('Content-Type: application/octet-stream');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
 header('Content-Length: ' . filesize($tmpFile));

@@ -24,18 +24,19 @@ switch ($period) {
         break;
     case 'custom':
         if ($date_from && $date_to) {
-            $where    = 'AND DATE(o.created_at) BETWEEN ? AND ?';
-            $params   = [$date_from, $date_to];
-            $types    = 'ss';
+            $where  = 'AND DATE(o.created_at) BETWEEN ? AND ?';
+            $params = [$date_from, $date_to];
+            $types  = 'ss';
         }
         break;
 }
 
 $sql = "
     SELECT oi.product_id, oi.category,
-           SUM(oi.quantity)                          AS total_qty,
-           COUNT(DISTINCT oi.order_id)               AS orders_count,
-           COALESCE(SUM(oi.quantity * oi.price), 0)  AS total_revenue
+           SUM(oi.quantity)                         AS total_qty,
+           COUNT(DISTINCT oi.order_id)              AS orders_count,
+           COALESCE(SUM(oi.quantity * oi.price), 0) AS total_revenue,
+           ROUND(AVG(oi.price), 0)                  AS avg_unit_price
     FROM order_items oi
     LEFT JOIN orders o ON oi.order_id = o.order_id
     WHERE 1=1 $where
@@ -52,8 +53,8 @@ $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-$allowed_cats = ['coffee_items','fast_food_items','pizza_items','cold_drink_items',
-                 'dessert_items','giftcards','sushi_items','sushi_sets','salad_items','cake_items'];
+$allowed_cats = ['coffee_items','fast_food_items','pizza_items','mini_pizza_items','cold_drink_items',
+                 'dessert_items','sushi_items','sushi_sets','salad_items','cake_items','ice_cream_items'];
 
 $products = [];
 foreach ($rows as $row) {
@@ -61,19 +62,32 @@ foreach ($rows as $row) {
     $pid = (int)$row['product_id'];
     if (!in_array($cat, $allowed_cats)) continue;
 
-    $nameCol = ($cat === 'giftcards') ? 'title' : 'name';
-    $s = $conn->prepare("SELECT `$nameCol` AS nm, image FROM `$cat` WHERE id=?");
+    $s = $conn->prepare("SELECT name AS nm, image, price FROM `$cat` WHERE id=?");
     $s->bind_param('i', $pid);
     $s->execute();
     $prod = $s->get_result()->fetch_assoc();
     $s->close();
 
+    if ($prod) {
+        $rawImg    = $prod['image'] ?? '';
+        $isDefault = (empty($rawImg) || $rawImg === 'static/images/menu_items/default.jpg');
+        $name      = $prod['nm'];
+        $image     = $isDefault ? '' : $rawImg;
+        $unitPrice = number_format((float)$prod['price'], 0, '.', ' ');
+    } else {
+        $name      = 'Видалений товар';
+        $image     = '';
+        $unitPrice = number_format((float)$row['avg_unit_price'], 0, '.', ' ');
+    }
+
     $products[] = [
-        'name'             => $prod['nm'] ?? '—',
-        'image'            => $prod['image'] ?? '',
+        'name'             => $name,
+        'image'            => $image,
+        'unit_price'       => $unitPrice,
         'total_qty'        => (int)$row['total_qty'],
         'orders_count'     => (int)$row['orders_count'],
         'total_revenue_fmt'=> number_format((float)$row['total_revenue'], 0, '.', ' '),
+        'deleted'          => !$prod,
     ];
 }
 

@@ -8,7 +8,7 @@ $data     = json_decode(file_get_contents('php://input'), true);
 $id       = isset($data['id'])       ? (int)$data['id']       : 0;
 $category = isset($data['category']) ? trim($data['category']) : '';
 
-$allowed = ['coffee_items','fast_food_items','pizza_items','cold_drink_items','dessert_items','giftcards','sushi_items','sushi_sets','salad_items','cake_items'];
+$allowed = ['coffee_items','fast_food_items','pizza_items','mini_pizza_items','cold_drink_items','ice_cream_items','dessert_items','sushi_items','sushi_sets','salad_items','cake_items'];
 if (!$id || !in_array($category, $allowed)) {
     echo json_encode(['success'=>false,'error'=>'Invalid input']); exit;
 }

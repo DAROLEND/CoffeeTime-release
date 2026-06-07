@@ -4,14 +4,20 @@ require_once '../includes/error_handler.php';
 require_once '../db/db.php';
 require_once '../includes/helpers.php';
 
-if (isset($_SESSION['user'])) {
+/* If already logged in as admin — go straight to admin panel */
+if (isset($_SESSION['admin'])) {
+    header('Location: ../admin/dashboard.php');
+    exit;
+}
+/* If logged in as regular user AND not coming from admin context — go to homepage */
+$fromAdmin = str_contains($_SERVER['HTTP_REFERER'] ?? '', '/admin/');
+if (isset($_SESSION['user']) && !$fromAdmin) {
     header('Location: ../pages/index.php');
     exit;
 }
 
 $error = '';
 
-/* ── Brute-force protection ── */
 $ip          = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 $maxAttempts = 5;
 $lockMinutes = 15;
@@ -61,11 +67,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
 
                 /* Check if this user is also an admin (by login == admin username) */
-                $as = $conn->prepare("SELECT username, role, permissions, display_name FROM admin_users WHERE username = ? LIMIT 1");
-                $as->bind_param('s', $login);
-                $as->execute();
-                $adminRow = $as->get_result()->fetch_assoc();
-                $as->close();
+                $as = $conn->prepare("SELECT username, role, permissions FROM admin_users WHERE username = ? LIMIT 1");
+                if ($as) {
+                    $as->bind_param('s', $login);
+                    $as->execute();
+                    $adminRow = $as->get_result()->fetch_assoc();
+                    $as->close();
+                }
 
                 if ($adminRow) {
                     $_SESSION['admin']       = $adminRow['username'];
@@ -95,7 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             /* No regular user — check admin_users directly (admin-only account) */
             $stmt->close();
-            $as = $conn->prepare("SELECT id, username, password, role, permissions, display_name FROM admin_users WHERE username = ? LIMIT 1");
+            $as = $conn->prepare("SELECT id, username, password, role, permissions FROM admin_users WHERE username = ? LIMIT 1");
+            if (!$as) { $error = 'Помилка бази даних.'; goto end_login; }
             $as->bind_param('s', $emailOrLogin);
             $as->execute();
             $adminRow = $as->get_result()->fetch_assoc();
@@ -145,15 +154,15 @@ $customStyles = ['../static/css/auth.css'];
 
       <div class="auth-features">
         <div class="auth-feature">
-          <span class="auth-feature-icon">☕</span>
+          <?= icon('coffee-cup', 20, 'rgba(255,255,255,0.85)', 'auth-feature-icon') ?>
           <span>Швидке замовлення в пару кліків</span>
         </div>
         <div class="auth-feature">
-          <span class="auth-feature-icon">🧾</span>
+          <?= icon('receipt', 20, 'rgba(255,255,255,0.85)', 'auth-feature-icon') ?>
           <span>Історія ваших замовлень</span>
         </div>
         <div class="auth-feature">
-          <span class="auth-feature-icon">🍕</span>
+          <?= icon('pizza', 20, 'rgba(255,255,255,0.85)', 'auth-feature-icon') ?>
           <span>Кава, піца, десерти — все в одному місці</span>
         </div>
       </div>
@@ -247,14 +256,12 @@ $customStyles = ['../static/css/auth.css'];
 
 <script>
 (function () {
-  /* ── Shake on server error ── */
   const right = document.getElementById('authRight');
   <?php if ($error || $isLocked): ?>
   right.classList.add('shake');
   right.addEventListener('animationend', () => right.classList.remove('shake'), { once: true });
   <?php endif; ?>
 
-  /* ── Eye toggles ── */
   document.querySelectorAll('.eye-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const inp  = document.getElementById(btn.dataset.target);
@@ -272,7 +279,6 @@ $customStyles = ['../static/css/auth.css'];
     });
   });
 
-  /* ── Live validation ── */
   function validate(fieldEl, inputEl, isValid) {
     fieldEl.classList.toggle('valid',   isValid);
     fieldEl.classList.toggle('invalid', !isValid);
@@ -290,7 +296,6 @@ $customStyles = ['../static/css/auth.css'];
     validate(ffPass, passInp, passInp.value.length >= 1);
   });
 
-  /* ── Submit loading state ── */
   document.getElementById('loginForm').addEventListener('submit', function (e) {
     const btn = document.getElementById('loginSubmit');
     const email = emailInp.value.trim();

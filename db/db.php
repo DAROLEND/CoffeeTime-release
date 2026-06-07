@@ -1,14 +1,4 @@
 <?php
-/**
- * Coffee Time — Database connection
- *
- * Provides:
- *   $conn  (mysqli)  — used by all existing queries
- *   $pdo   (PDO)     — available for new security-sensitive code
- *
- * Credentials come exclusively from .env → never hardcoded here.
- */
-
 require_once dirname(__DIR__) . '/includes/env.php';
 
 define('DB_HOST',    getenv('DB_HOST')    ?: 'localhost');
@@ -17,10 +7,10 @@ define('DB_USER',    getenv('DB_USER')    ?: 'root');
 define('DB_PASS',    getenv('DB_PASS')    ?: '');
 define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
 
-/* ── MySQLi connection ($conn) — used by existing code ─────────────────────── */
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 try {
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    $socket = getenv('DB_SOCKET') ?: ini_get('mysqli.default_socket');
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, 3306, $socket);
     $conn->set_charset(DB_CHARSET);
 } catch (mysqli_sql_exception $e) {
     error_log('[DB] MySQLi connection failed: ' . $e->getMessage());
@@ -30,10 +20,12 @@ try {
     exit;
 }
 
-/* ── PDO connection ($pdo) — for new security-focused code ─────────────────── */
 try {
+    $pdoDsn = isset($socket) && $socket
+        ? 'mysql:unix_socket=' . $socket . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET
+        : 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
     $pdo = new PDO(
-        'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET,
+        $pdoDsn,
         DB_USER,
         DB_PASS,
         [

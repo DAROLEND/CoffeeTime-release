@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/session.php';
 require_once '../db/db.php';
+require_once '../includes/helpers.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -29,7 +30,7 @@ $stmt->execute();
 $rawItems = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-$allowed = ['coffee_items', 'fast_food_items', 'pizza_items', 'cold_drink_items', 'dessert_items', 'giftcards', 'sushi_items', 'sushi_sets', 'salad_items', 'cake_items'];
+$allowed = ['coffee_items', 'fast_food_items', 'pizza_items', 'cold_drink_items', 'dessert_items', 'sushi_items', 'sushi_sets', 'salad_items', 'cake_items', 'ice_cream_items', 'mini_pizza_items'];
 $items   = [];
 
 foreach ($rawItems as $it) {
@@ -37,18 +38,20 @@ foreach ($rawItems as $it) {
     $pid  = (int)$it['product_id'];
     $name = '—';
 
+    $image = null;
     if (in_array($cat, $allowed)) {
-        $nameCol = ($cat === 'giftcards') ? 'title' : 'name';
-        $s = $conn->prepare("SELECT `$nameCol` AS nm FROM `$cat` WHERE id=?");
+        $s = $conn->prepare("SELECT name AS nm, image AS img FROM `$cat` WHERE id=?");
         $s->bind_param('i', $pid);
         $s->execute();
         $row  = $s->get_result()->fetch_assoc();
         $s->close();
-        $name = $row['nm'] ?? '—';
+        $name  = $row['nm']  ?? '—';
+        $image = item_img($row['img'] ?? '', '') ?: null;
     }
 
     $items[] = [
         'name'     => $name,
+        'image'    => $image,
         'category' => $cat,
         'quantity' => (int)$it['quantity'],
         'price'    => (float)$it['price'],

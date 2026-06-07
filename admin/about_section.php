@@ -3,13 +3,11 @@ require_once __DIR__ . '/../db/db.php';
 require_once __DIR__ . '/auth_check.php';
 require_perm('content');
 
-/* ── Auto-create table ── */
 $conn->query("CREATE TABLE IF NOT EXISTS site_settings (
   `key`   VARCHAR(100) NOT NULL PRIMARY KEY,
   `value` TEXT NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-/* ── Seed defaults if missing ── */
 $defaults = [
     'about_title'        => 'Місце, де час зупиняється',
     'about_text'         => "Coffee Time — це затишне кафе в серці міста, де ми щодня готуємо свіжі десерти та каву з любов'ю. Ніяких заморожених напівфабрикатів — тільки справжнє та смачне.",
@@ -39,21 +37,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $upd->close();
 
-    /* Optional photo upload */
-    if (!empty($_FILES['about_photo']['name'])) {
-        $uploadDir = __DIR__ . '/../static/images/main/';
-        $ext  = strtolower(pathinfo($_FILES['about_photo']['name'], PATHINFO_EXTENSION));
+    /* Photo upload — cropped (base64) or raw file */
+    $uploadDir = __DIR__ . '/../static/images/main/';
+    $savedPath = '';
+    if (!empty($_POST['about_photo_b64'])) {
+        $ext = save_cropped_image($_POST['about_photo_b64'], $uploadDir . 'about-photo.jpg');
+        if ($ext) $savedPath = 'static/images/main/about-photo.' . $ext;
+    } elseif (!empty($_FILES['about_photo']['name'])) {
+        $ext     = strtolower(pathinfo($_FILES['about_photo']['name'], PATHINFO_EXTENSION));
         $allowed = ['jpg','jpeg','png','webp'];
         if (in_array($ext, $allowed) && $_FILES['about_photo']['size'] <= 4 * 1024 * 1024) {
             $fname = 'about-photo.' . $ext;
-            if (move_uploaded_file($_FILES['about_photo']['tmp_name'], $uploadDir . $fname)) {
-                $path = 'static/images/main/' . $fname;
-                $upd2 = $conn->prepare("INSERT INTO site_settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
-                $upd2->bind_param('ss', ...['about_photo', $path]);
-                $upd2->execute();
-                $upd2->close();
-            }
+            if (move_uploaded_file($_FILES['about_photo']['tmp_name'], $uploadDir . $fname))
+                $savedPath = 'static/images/main/' . $fname;
         }
+    }
+    if ($savedPath) {
+        $upd2 = $conn->prepare("INSERT INTO site_settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
+        $upd2->bind_param('ss', ...['about_photo', $savedPath]);
+        $upd2->execute();
+        $upd2->close();
     }
 
     $_SESSION['admin_flash']      = 'Збережено.';
@@ -62,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-/* ── Load current values ── */
 $settings = [];
 $r = $conn->query("SELECT `key`, `value` FROM site_settings WHERE `key` LIKE 'about_%'");
 if ($r) while ($row = $r->fetch_assoc()) $settings[$row['key']] = $row['value'];
@@ -101,7 +103,8 @@ include 'includes/layout_top.php';
 
       <div class="ab-field">
         <label>Текст</label>
-        <textarea name="about_text" rows="5" maxlength="600"><?= $s('about_text') ?></textarea>
+        <textarea name="about_text" id="aboutText" maxlength="600"><?= $s('about_text') ?></textarea>
+        <div class="ab-char-counter"><span id="charCount">0</span> / 600</div>
       </div>
 
       <div class="ab-row3">
@@ -124,8 +127,9 @@ include 'includes/layout_top.php';
 
       <div class="ab-field">
         <label>Фото <small>(залиш порожнім щоб не міняти · JPG, PNG, WEBP · до 4 MB)</small></label>
+        <input type="hidden" name="about_photo_b64" id="about_photo_b64">
         <div class="upload-zone">
-          <input type="file" name="about_photo" accept="image/jpeg,image/png,image/webp">
+          <input type="file" name="about_photo" accept="image/jpeg,image/png,image/webp" data-crop-hidden="about_photo_b64">
           <div class="upload-zone__placeholder">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             <span>Оберіть або перетягніть фото</span>
@@ -192,9 +196,13 @@ include 'includes/layout_top.php';
 .ab-field textarea {
   width:100%; padding:10px 14px; font-size:14px;
   border:1.5px solid #e0d8d0; border-radius:10px;
-  outline:none; font-family:inherit; resize:vertical;
+  outline:none; font-family:inherit; resize:none;
   transition: border-color .2s;
 }
+.ab-field textarea { min-height:80px; overflow:hidden; line-height:1.6; }
+.ab-char-counter { font-size:11px; color:#bbb; text-align:right; margin-top:4px; transition: color .2s; }
+.ab-char-counter.near { color:#e67e22; }
+.ab-char-counter.full { color:#e53935; }
 .ab-field input:focus, .ab-field textarea:focus { border-color:#8B4513; }
 
 .ab-row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
@@ -237,6 +245,24 @@ include 'includes/layout_top.php';
 </style>
 
 <script>
+/* Auto-resize textarea */
+const textarea    = document.getElementById('aboutText');
+const charCount   = document.getElementById('charCount');
+const charCounter = charCount?.closest('.ab-char-counter');
+
+function autoResize() {
+  textarea.style.height = 'auto';
+  textarea.style.height = textarea.scrollHeight + 'px';
+}
+function updateCounter() {
+  const len = textarea.value.length;
+  charCount.textContent = len;
+  charCounter.classList.toggle('near', len >= 480 && len < 580);
+  charCounter.classList.toggle('full', len >= 580);
+}
+textarea.addEventListener('input', () => { autoResize(); updateCounter(); });
+autoResize(); updateCounter();
+
 /* Live preview update */
 const titleInp  = document.querySelector('[name="about_title"]');
 const textInp   = document.querySelector('[name="about_text"]');

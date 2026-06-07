@@ -87,6 +87,13 @@ $orderId = (int)($_SESSION['pending_order_id'] ?? 0);
       transition: background .2s;
     }
     .fail-btn-outline:hover { background: #fdf6ee; }
+    @media (max-width: 480px) {
+      .fail-page-wrap { margin: 24px auto 60px; padding: 0 12px; }
+      .fail-card { padding: 32px 20px 28px; border-radius: 16px; }
+      .fail-icon { width: 68px; height: 68px; font-size: 28px; }
+      .fail-actions { flex-direction: column; }
+      .fail-btn-primary, .fail-btn-outline { width: 100%; text-align: center; padding: 14px 20px; min-height: 50px; }
+    }
   </style>
   <script defer src="../static/js/animations.js"></script>
 </head>

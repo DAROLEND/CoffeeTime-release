@@ -6,51 +6,67 @@ require_perm('products');
 $pageTitle  = 'Товари';
 $activePage = 'products';
 
-$allowed = ['coffee_items','fast_food_items','pizza_items','cold_drink_items','dessert_items','giftcards','sushi_items','sushi_sets','salad_items','cake_items'];
+$allowed = ['coffee_items','fast_food_items','pizza_items','mini_pizza_items','cold_drink_items','ice_cream_items','dessert_items','sushi_items','sushi_sets','salad_items','cake_items'];
 $categoryNames = [
-    'coffee_items'     => 'Кава',
-    'fast_food_items'  => 'Фаст-фуд',
-    'pizza_items'      => 'Піца',
-    'cold_drink_items' => 'Холодні напої',
-    'dessert_items'    => 'Десерти',
-    'giftcards'        => 'Подарункові картки',
-    'sushi_items'      => 'Суші',
-    'sushi_sets'       => 'Сети суші',
-    'salad_items'      => 'Салати',
-    'cake_items'       => 'Торти на замовлення',
+    'coffee_items'      => 'Кава',
+    'fast_food_items'   => 'Фаст-фуд',
+    'pizza_items'       => 'Піца', 'mini_pizza_items' => 'Міні-піца',
+    'cold_drink_items'  => 'Холодні напої',
+    'ice_cream_items'   => 'Морозиво',
+    'dessert_items'     => 'Десерти',
+    'sushi_items'       => 'Суші',
+    'sushi_sets'        => 'Сети суші',
+    'salad_items'       => 'Салати',
+    'cake_items'        => 'Торти на замовлення',
 ];
 
-$category = $_GET['category'] ?? 'coffee_items';
-if (!in_array($category, $allowed)) $category = 'coffee_items';
-$catTitle = $categoryNames[$category];
+$category = $_GET['category'] ?? 'all';
+$isAll    = ($category === 'all');
+if (!$isAll && !in_array($category, $allowed)) $category = 'all';
+$catTitle = $isAll ? 'Всі товари' : ($categoryNames[$category] ?? $category);
 
-/* ── Popularity by product_id ── */
 $popularity = [];
-$r = $conn->query("SELECT product_id, SUM(quantity) AS sold FROM order_items WHERE category='$category' GROUP BY product_id");
-if ($r) while ($row = $r->fetch_assoc()) $popularity[(int)$row['product_id']] = (int)$row['sold'];
+if (!$isAll) {
+    $r = $conn->query("SELECT product_id, SUM(quantity) AS sold FROM order_items WHERE category='$category' GROUP BY product_id");
+    if ($r) while ($row = $r->fetch_assoc()) $popularity[(int)$row['product_id']] = (int)$row['sold'];
+}
 
-/* ── Items ── */
 $items = [];
-$res = $conn->query("SELECT * FROM `$category` ORDER BY id DESC");
-if ($res) while ($row = $res->fetch_assoc()) $items[] = $row;
+if ($isAll) {
+    foreach ($allowed as $t) {
+        $res2 = $conn->query("SELECT id, name, description, image, price FROM `$t` ORDER BY id DESC");
+        if ($res2) while ($row = $res2->fetch_assoc()) {
+            $row['_table'] = $t;
+            $items[] = $row;
+        }
+    }
+    usort($items, fn($a,$b) => strcmp($a['name'], $b['name']));
+} else {
+    $res = $conn->query("SELECT * FROM `$category` ORDER BY id DESC");
+    if ($res) while ($row = $res->fetch_assoc()) $items[] = $row;
+}
 
-/* ── Tab counts ── */
 $tabCounts = [];
 foreach ($allowed as $t) {
     $r2 = $conn->query("SELECT COUNT(*) AS c FROM `$t`");
     $tabCounts[$t] = $r2 ? (int)$r2->fetch_assoc()['c'] : 0;
 }
+$tabCounts['all'] = array_sum($tabCounts);
 
-/* giftcards uses 'title' not 'name' — normalize */
-$nameCol = ($category === 'giftcards') ? 'title' : 'name';
+$nameCol = 'name';
 
 include 'includes/layout_top.php';
 ?>
 
 <div class="cat-tabs">
+  <a href="manage_items.php?category=all"
+     class="cat-tab <?= $isAll?'active':'' ?>">
+    Всі
+    <span class="cat-tab-count"><?= $tabCounts['all'] ?></span>
+  </a>
   <?php foreach ($allowed as $t): ?>
     <a href="manage_items.php?category=<?= $t ?>"
-       class="cat-tab <?= $category===$t?'active':'' ?>">
+       class="cat-tab <?= (!$isAll && $category===$t)?'active':'' ?>">
       <?= $categoryNames[$t] ?>
       <span class="cat-tab-count"><?= $tabCounts[$t] ?></span>
     </a>
@@ -59,12 +75,21 @@ include 'includes/layout_top.php';
 
 <div class="section-head">
   <h2 class="section-title"><?= htmlspecialchars($catTitle) ?></h2>
-  <button class="btn-add-item" onclick="openItemModal()">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-    Додати товар
-  </button>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div style="position:relative">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="itemSearch" placeholder="Пошук по назві…"
+             style="padding:8px 12px 8px 32px;border:1.5px solid #e0d8d0;border-radius:10px;font-size:13px;font-family:inherit;outline:none;width:200px;transition:border-color .2s"
+             oninput="filterItems(this.value)"
+             onfocus="this.style.borderColor='#8B4513'" onblur="this.style.borderColor='#e0d8d0'">
+    </div>
+    <button class="btn-add-item" onclick="openItemModal()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Додати товар
+    </button>
+  </div>
 </div>
 
 <?php if (isset($_GET['saved'])): ?>
@@ -75,29 +100,48 @@ include 'includes/layout_top.php';
   <table class="admin-table">
     <thead>
       <tr>
-        <th>Фото</th><th>Назва</th><th>Опис</th>
-        <th>Ціна</th><th>Продажі</th><th>Дії</th>
+        <th>Фото</th><th>Назва</th>
+        <?php if ($isAll): ?><th>Категорія</th><?php endif; ?>
+        <th class="col-hide-mobile">Опис</th>
+        <th>Ціна</th><th class="col-hide-mobile">Продажі</th><th>Дії</th>
       </tr>
     </thead>
     <tbody id="itemsTableBody">
       <?php foreach ($items as $item):
-        $name = $item[$nameCol] ?? $item['name'] ?? '—';
-        $desc = $item['description'] ?? '';
-        $sold = $popularity[$item['id']] ?? 0;
+        $itemCat  = $item['_table'] ?? $category;
+        $name     = $item['name'] ?? '—';
+        $desc     = $item['description'] ?? '';
+        $sold     = $popularity[$item['id']] ?? 0;
       ?>
-      <tr id="item-row-<?= $item['id'] ?>">
+      <tr id="item-row-<?= $item['id'] ?>" data-cat="<?= htmlspecialchars($itemCat) ?>">
+        <?php
+          $imgSrc = $item['image'] ?? '';
+          $hasPhoto = !empty($imgSrc)
+                      && !str_contains($imgSrc, 'default.jpg')
+                      && file_exists(__DIR__ . '/../' . $imgSrc);
+        ?>
         <td>
-          <?php if (!empty($item['image'])): ?>
-            <img src="../<?= htmlspecialchars($item['image']) ?>" alt=""
-                 style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #ede5dd">
+          <?php if ($hasPhoto): ?>
+            <img src="../<?= htmlspecialchars($imgSrc) ?>" alt=""
+                 style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #ede5dd"
+                 onerror="this.replaceWith(document.getElementById('no-photo-tpl').content.cloneNode(true))">
           <?php else: ?>
-            <div style="width:52px;height:52px;background:#f0e8df;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px">☕</div>
+            <div style="width:52px;height:52px;background:#f0e8df;border-radius:8px;display:flex;align-items:center;justify-content:center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9b49a" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
           <?php endif; ?>
         </td>
         <td><strong><?= htmlspecialchars($name) ?></strong></td>
-        <td class="td-desc"><?= htmlspecialchars(mb_substr($desc,0,70)) ?><?= mb_strlen($desc)>70?'…':'' ?></td>
-        <td><?= number_format($item['price'],2) ?> ₴</td>
+        <?php if ($isAll): ?>
         <td>
+          <a href="manage_items.php?category=<?= $itemCat ?>" style="font-size:12px;color:#8B4513;text-decoration:none;background:#fdf3e8;padding:3px 8px;border-radius:6px;white-space:nowrap">
+            <?= htmlspecialchars($categoryNames[$itemCat] ?? $itemCat) ?>
+          </a>
+        </td>
+        <?php endif; ?>
+        <td class="td-desc col-hide-mobile"><?= htmlspecialchars(mb_substr($desc,0,70)) ?><?= mb_strlen($desc)>70?'…':'' ?></td>
+        <td><?= number_format($item['price'],2) ?> ₴</td>
+        <td class="col-hide-mobile">
           <?php if ($sold > 0): ?>
             <span class="sold-badge"><?= $sold ?> шт</span>
           <?php else: ?>
@@ -106,8 +150,14 @@ include 'includes/layout_top.php';
         </td>
         <td>
           <div class="item-actions" id="actions-<?= $item['id'] ?>">
+            <?php
+              $itemForJs = array_merge($item, ['_nameCol' => $nameCol]);
+              if (!$hasPhoto) {
+                  $itemForJs['image'] = '';
+              }
+            ?>
             <button class="item-btn-edit"
-                    onclick='openItemModal(<?= $item["id"] ?>, <?= htmlspecialchars(json_encode(array_merge($item, ["_nameCol" => $nameCol])), ENT_QUOTES) ?>)'>
+                    onclick='openItemModal(<?= $item["id"] ?>, <?= htmlspecialchars(json_encode($itemForJs), ENT_QUOTES) ?>)'>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Редагувати
             </button>
@@ -127,6 +177,9 @@ include 'includes/layout_top.php';
       <?php if (empty($items)): ?>
         <tr><td colspan="6" style="text-align:center;color:#bbb;padding:32px">Товарів у цій категорії немає</td></tr>
       <?php endif; ?>
+      <tr id="search-empty" style="display:none">
+        <td colspan="6" style="text-align:center;color:#bbb;padding:32px">Нічого не знайдено</td>
+      </tr>
     </tbody>
   </table>
 </div>
@@ -138,7 +191,8 @@ include 'includes/layout_top.php';
     <h3 class="item-modal-title" id="itemModalTitle">Додати товар</h3>
 
     <form id="itemModalForm" method="post" enctype="multipart/form-data"
-          action="add_item.php?category=<?= $category ?>">
+          action="add_item.php?category=<?= $isAll ? '' : $category ?>">
+      <input type="hidden" name="_form_category" id="itemModalFormCat" value="<?= $isAll ? '' : $category ?>">
       <input type="hidden" name="_item_id"  id="itemModalId"     value="">
       <input type="hidden" name="_action"   id="itemModalAction" value="add">
 
@@ -158,35 +212,112 @@ include 'includes/layout_top.php';
         <textarea class="im-control im-textarea" name="description" id="imDesc"></textarea>
       </div>
 
-      <div class="form-group" style="margin-top:18px">
+      <div class="form-group im-photo-group" style="margin-top:18px">
         <label class="im-label">Фото</label>
-        <div class="im-photo-zone" id="imPhotoZone">
-          <!-- Filled by JS -->
-          <div class="im-photo-placeholder" id="imPhotoPlaceholder">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#c49a6c" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <span>Клікніть або перетягніть фото</span>
+        <div class="im-photo-section">
+          <!-- Preview -->
+          <div class="im-photo-preview-wrap no-photo" id="imPhotoWrap">
+            <img id="imPhotoPreview" src="" alt="" style="display:none">
+            <div class="im-photo-empty" id="imPhotoEmpty">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d4c4b8" stroke-width="1.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Немає фото</span>
+            </div>
           </div>
-          <img id="imPhotoPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px">
-          <div class="im-photo-label" id="imPhotoLabel" style="display:none">Поточне фото</div>
-          <input type="file" name="image" id="imImage" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+          <!-- Actions -->
+          <div class="im-photo-actions">
+            <label class="im-pick-btn" for="imImage">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span id="imPickLabel">Обрати фото</span>
+            </label>
+            <input type="file" name="image" id="imImage" accept="image/*" style="display:none">
+            <input type="hidden" name="image_b64" id="imImageB64">
+            <input type="hidden" name="remove_image" id="imRemoveImage" value="0">
+            <button type="button" class="im-edit-btn" id="imEditBtn" style="display:none">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Редагувати
+            </button>
+            <button type="button" class="im-remove-btn" id="imRemoveBtn" style="display:none">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              Видалити фото
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- Scoops settings (ice_cream_items only) -->
+      <div id="imScoopsBlock" style="display:none; margin-top:20px; padding:16px; background:#faf7f2; border-radius:10px; border:1px solid #e8e0d8;">
+        <div style="font-size:13px; font-weight:700; color:#8B4513; margin-bottom:14px;">Налаштування кульок</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin:0">
+            <label class="im-label">1 кулька (базова ціна)</label>
+            <input class="im-control" type="number" id="imScoop1Price" placeholder="45" step="0.01" min="0" readonly style="background:#f0ebe4;color:#999;cursor:not-allowed;" title="Базова ціна — поле «Ціна» вище">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="im-label">Надбавка за 2 кульки (₴)</label>
+            <input class="im-control" type="number" name="scoop_diff_2" id="imScoopDiff2" placeholder="20" step="0.01" min="0">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="im-label">Надбавка за 3 кульки (₴)</label>
+            <input class="im-control" type="number" name="scoop_diff_3" id="imScoopDiff3" placeholder="40" step="0.01" min="0">
+          </div>
+        </div>
+        <input type="hidden" name="variant_options" id="imVariantOptions">
       </div>
 
       <div class="im-modal-footer">
         <button type="button" class="im-btn-cancel" onclick="closeItemModal()">Скасувати</button>
-        <button type="submit" class="im-btn-save">Зберегти</button>
+        <button type="submit" class="im-btn-save" onclick="buildVariantOptions()">Зберегти</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-var currentCategory = '<?= $category ?>';
+var currentCategory = '<?= $isAll ? 'all' : $category ?>';
+var isIceCreamCat   = (currentCategory === 'ice_cream_items');
+
+function getItemCat(id) {
+  var row = document.getElementById('item-row-' + id);
+  return (row && row.dataset.cat) ? row.dataset.cat : currentCategory;
+}
+
+function toggleScoopsBlock() {
+  var block = document.getElementById('imScoopsBlock');
+  if (block) block.style.display = isIceCreamCat ? 'block' : 'none';
+}
+
+function buildVariantOptions() {
+  if (!isIceCreamCat) return;
+  var basePrice = parseFloat(document.getElementById('imPrice').value) || 0;
+  var diff2 = parseFloat(document.getElementById('imScoopDiff2').value) || 0;
+  var diff3 = parseFloat(document.getElementById('imScoopDiff3').value) || 0;
+  var vo = {
+    type: 'scoops',
+    label: 'Кількість кульок',
+    options: [
+      { id: '1', label: '1 кулька',  price_diff: 0     },
+      { id: '2', label: '2 кульки',  price_diff: diff2 },
+      { id: '3', label: '3 кульки',  price_diff: diff3 },
+    ]
+  };
+  document.getElementById('imVariantOptions').value = JSON.stringify(vo);
+}
+
+// Sync base price display into scoop 1 field
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'imPrice' && isIceCreamCat) {
+    var s1 = document.getElementById('imScoop1Price');
+    if (s1) s1.value = e.target.value;
+  }
+});
 
 function openItemModal(id, item) {
   var overlay = document.getElementById('itemModalOverlay');
   var form    = document.getElementById('itemModalForm');
   var nameCol = item && item._nameCol ? item._nameCol : 'name';
+
+  resetPhotoZone();
+  toggleScoopsBlock();
 
   if (id && item) {
     document.getElementById('itemModalTitle').textContent = 'Редагувати товар';
@@ -198,15 +329,33 @@ function openItemModal(id, item) {
     descEl.value = item.description || '';
     descEl.style.height = 'auto';
     descEl.style.height = Math.max(80, descEl.scrollHeight) + 'px';
-    form.action = 'edit_item.php?category=' + currentCategory + '&id=' + id;
+    var itemCatForAction = getItemCat(id);
+    form.action = 'edit_item.php?category=' + itemCatForAction + '&id=' + id;
+
+    // Populate scoops fields from variant_options
+    if (isIceCreamCat && item.variant_options) {
+      try {
+        var vo = JSON.parse(item.variant_options);
+        if (vo && vo.type === 'scoops' && Array.isArray(vo.options)) {
+          var opt2 = vo.options.find(function(o){ return o.id === '2'; });
+          var opt3 = vo.options.find(function(o){ return o.id === '3'; });
+          document.getElementById('imScoopDiff2').value = opt2 ? opt2.price_diff : '';
+          document.getElementById('imScoopDiff3').value = opt3 ? opt3.price_diff : '';
+          document.getElementById('imScoop1Price').value = item.price || '';
+        }
+      } catch(e) {}
+    }
 
     if (item.image) {
-      document.getElementById('imPhotoPreview').src     = '../' + item.image;
-      document.getElementById('imPhotoPreview').style.display = 'block';
-      document.getElementById('imPhotoPlaceholder').style.display = 'none';
-      document.getElementById('imPhotoLabel').style.display = 'block';
-    } else {
-      resetPhotoZone();
+      var prev = document.getElementById('imPhotoPreview');
+      prev.onerror = function() { resetPhotoZone(); prev.onerror = null; };
+      prev.src = '../' + item.image;
+      prev.style.display = 'block';
+      document.getElementById('imPhotoWrap').classList.remove('no-photo');
+      document.getElementById('imPhotoEmpty').style.display   = 'none';
+      document.getElementById('imPickLabel').textContent      = 'Замінити фото';
+      document.getElementById('imEditBtn').style.display      = 'none';
+      document.getElementById('imRemoveBtn').style.display    = 'inline-flex';
     }
   } else {
     document.getElementById('itemModalTitle').textContent = 'Додати товар';
@@ -216,7 +365,12 @@ function openItemModal(id, item) {
     document.getElementById('imPrice').value              = '';
     document.getElementById('imDesc').value               = '';
     document.getElementById('imDesc').style.height        = '80px';
-    form.action = 'add_item.php?category=' + currentCategory;
+    if (isIceCreamCat) {
+      document.getElementById('imScoopDiff2').value = '';
+      document.getElementById('imScoopDiff3').value = '';
+      document.getElementById('imScoop1Price').value = '';
+    }
+    form.action = 'add_item.php?category=' + (currentCategory === 'all' ? '' : currentCategory);
     resetPhotoZone();
   }
 
@@ -224,10 +378,18 @@ function openItemModal(id, item) {
 }
 
 function resetPhotoZone() {
-  document.getElementById('imPhotoPreview').src          = '';
-  document.getElementById('imPhotoPreview').style.display = 'none';
-  document.getElementById('imPhotoPlaceholder').style.display = 'flex';
-  document.getElementById('imPhotoLabel').style.display  = 'none';
+  var prev = document.getElementById('imPhotoPreview');
+  prev.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+  prev.style.display = 'none';
+  document.getElementById('imPhotoWrap').classList.add('no-photo');
+  document.getElementById('imPhotoEmpty').style.display   = 'flex';
+  document.getElementById('imEditBtn').style.display      = 'none';
+  document.getElementById('imRemoveBtn').style.display    = 'none';
+  document.getElementById('imImage').value                = '';
+  document.getElementById('imImageB64').value             = '';
+  document.getElementById('imRemoveImage').value          = '0';
+  document.getElementById('imPickLabel').textContent      = 'Обрати фото';
+  _imOriginalDataUrl = null;
 }
 
 function closeItemModal() {
@@ -243,19 +405,57 @@ document.getElementById('imDesc').addEventListener('input', function() {
   this.style.height = Math.max(80, this.scrollHeight) + 'px';
 });
 
-/* Image preview on select */
+/* Анімація кліку на label-кнопці */
+(function() {
+  var btn = document.getElementById('itemModalOverlay').querySelector('.im-pick-btn');
+  if (btn) {
+    btn.addEventListener('mousedown', function() { btn.classList.add('pressing'); });
+    ['mouseup','mouseleave'].forEach(function(ev) {
+      btn.addEventListener(ev, function() { btn.classList.remove('pressing'); });
+    });
+  }
+})();
+
+/* Image select → plain preview + Редагувати button */
+var _imOriginalDataUrl = null;
 document.getElementById('imImage').addEventListener('change', function() {
   if (!this.files || !this.files[0]) return;
+  var file = this.files[0];
   var reader = new FileReader();
   reader.onload = function(e) {
+    _imOriginalDataUrl = e.target.result;
     var preview = document.getElementById('imPhotoPreview');
     preview.src = e.target.result;
     preview.style.display = 'block';
-    document.getElementById('imPhotoPlaceholder').style.display = 'none';
-    document.getElementById('imPhotoLabel').style.display = 'block';
-    document.getElementById('imPhotoLabel').textContent = 'Нове фото';
+    document.getElementById('imPhotoWrap').classList.remove('no-photo');
+    document.getElementById('imPhotoEmpty').style.display = 'none';
+    document.getElementById('imPickLabel').textContent    = 'Замінити фото';
+    document.getElementById('imEditBtn').style.display    = 'inline-flex';
+    document.getElementById('imImageB64').value           = '';
   };
-  reader.readAsDataURL(this.files[0]);
+  reader.readAsDataURL(file);
+});
+
+/* Редагувати → open cropper with original */
+document.getElementById('imEditBtn').addEventListener('click', function() {
+  if (!_imOriginalDataUrl || !window.openImgCropper) return;
+  var hiddenInp = document.getElementById('imImageB64');
+  var preview   = document.getElementById('imPhotoPreview');
+  window.openImgCropper(_imOriginalDataUrl, {
+    hiddenInput: hiddenInp,
+    onApply: function(b64) {
+      preview.src = b64;
+      preview.style.display = 'block';
+      document.getElementById('imPhotoWrap').classList.remove('no-photo');
+      document.getElementById('imPhotoEmpty').style.display = 'none';
+    }
+  });
+});
+
+/* Видалити фото */
+document.getElementById('imRemoveBtn').addEventListener('click', function() {
+  resetPhotoZone();
+  document.getElementById('imRemoveImage').value = '1';
 });
 
 /* Inline delete */
@@ -273,7 +473,7 @@ function doDelete(id) {
   fetch('ajax_delete_item.php', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id: id, category: currentCategory})
+    body: JSON.stringify({id: id, category: getItemCat(id)})
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -290,4 +490,25 @@ function doDelete(id) {
 }
 </script>
 
+<script>
+function filterItems(q) {
+  q = q.trim().toLowerCase();
+  var rows = document.querySelectorAll('#itemsTableBody tr[id^="item-row-"]');
+  var empty = document.getElementById('search-empty');
+  var found = 0;
+  rows.forEach(function(row) {
+    var name = (row.querySelector('td:nth-child(2)')?.textContent || '').toLowerCase();
+    var show = !q || name.includes(q);
+    row.style.display = show ? '' : 'none';
+    if (show) found++;
+  });
+  if (empty) empty.style.display = (!q || found > 0) ? 'none' : '';
+}
+</script>
+
+<template id="no-photo-tpl">
+  <div style="width:52px;height:52px;background:#f0e8df;border-radius:8px;display:flex;align-items:center;justify-content:center">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9b49a" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+  </div>
+</template>
 <?php include 'includes/layout_bottom.php'; ?>

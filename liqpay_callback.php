@@ -1,18 +1,11 @@
 <?php
-/**
- * LiqPay Server Callback (server_url)
- * LiqPay sends a POST request here after every payment event.
- * Must be accessible from the internet (won't work on localhost).
- *
- * Verify at: https://www.liqpay.ua/documentation/api/callback
- */
 require_once __DIR__ . '/db/db.php';
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/liqpay.php';
+require_once __DIR__ . '/includes/telegram.php';
 
 header('Content-Type: text/plain; charset=utf-8');
 
-/* ── Read POST ── */
 $data      = $_POST['data']      ?? '';
 $signature = $_POST['signature'] ?? '';
 
@@ -21,7 +14,6 @@ if (!$data || !$signature) {
     exit('Missing data or signature');
 }
 
-/* ── Verify signature ── */
 $liqpay = new LiqPay(LIQPAY_PUBLIC_KEY, LIQPAY_PRIVATE_KEY);
 
 if (!$liqpay->verify_signature($data, $signature)) {
@@ -29,24 +21,19 @@ if (!$liqpay->verify_signature($data, $signature)) {
     exit('Invalid signature');
 }
 
-/* ── Decode response ── */
 $resp = $liqpay->decode_data_str($data);
 
 $liqpayOrderId = $resp->order_id ?? '';   // e.g. "coffeetime_42"
 $status        = $resp->status   ?? '';
 $amount        = $resp->amount   ?? 0;
 
-/* ── Extract our DB order_id ── */
-// We prefix with 'coffeetime_' when creating the payment
+// Orders are prefixed with 'coffeetime_' to avoid ID collisions in LiqPay dashboard
 $orderId = (int)str_replace('coffeetime_', '', $liqpayOrderId);
 if ($orderId <= 0) {
     http_response_code(400);
     exit('Invalid order_id');
 }
 
-/* ── Update orders table ── */
-// Map LiqPay status → our payment_status
-// Possible LiqPay statuses: success, sandbox, failure, error, wait_accept, reversed, etc.
 $paymentStatus = 'pending';
 $orderStatus   = null;
 
@@ -60,7 +47,6 @@ if (in_array($status, ['success', 'sandbox'], true)) {
     $paymentStatus = 'failed';
 }
 
-/* ── Try to update payment_status (graceful if column missing) ── */
 if ($orderStatus) {
     $stmt = $conn->prepare(
         "UPDATE orders
@@ -74,7 +60,6 @@ if ($orderStatus) {
         $stmt->close();
     }
 } else {
-    // Only update payment_status
     $stmt = $conn->prepare(
         "UPDATE orders SET payment_status = ? WHERE order_id = ?"
     );
@@ -83,6 +68,10 @@ if ($orderStatus) {
         $stmt->execute();
         $stmt->close();
     }
+}
+
+if ($paymentStatus === 'paid') {
+    notify_order_from_db($orderId, $conn);
 }
 
 http_response_code(200);
