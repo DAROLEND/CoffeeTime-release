@@ -24,8 +24,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
         $stmt->close();
 
         if ($row) {
-            $path = $galleryDir . $row['filename'];
-            if (file_exists($path)) @unlink($path);
+            if (strpos($row['filename'], 'http') === 0) {
+                // Supabase URL — extract remote path and delete
+                $parsed = parse_url($row['filename'], PHP_URL_PATH);
+                $prefix = '/storage/v1/object/public/' . SUPABASE_BUCKET . '/';
+                if (strpos($parsed, $prefix) === 0)
+                    supabase_delete(substr($parsed, strlen($prefix)));
+            } else {
+                $path = $galleryDir . $row['filename'];
+                if (file_exists($path)) @unlink($path);
+            }
             $stmt = $conn->prepare("DELETE FROM gallery WHERE id=?");
             $stmt->bind_param("i", $id);
             $ok = $stmt->execute();
@@ -81,10 +89,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['photos'])) {
         }
         $newName = uniqid('gallery_', true) . '.' . $ext;
         $dest    = $galleryDir . $newName;
-        if (move_uploaded_file($files['tmp_name'][$i], $dest)) {
+        $mime    = in_array($ext, ['png']) ? 'image/png' : (in_array($ext, ['gif']) ? 'image/gif' : ($ext === 'webp' ? 'image/webp' : 'image/jpeg'));
+        $savedUrl = upload_image($files['tmp_name'][$i], $dest, 'gallery/' . $newName, $mime);
+        if ($savedUrl !== false) {
             $fileAlt = $alt ?: pathinfo($files['name'][$i], PATHINFO_FILENAME);
             $stmt = $conn->prepare("INSERT INTO gallery (filename, alt, category) VALUES (?, ?, ?)");
-            $stmt->bind_param("sss", $newName, $fileAlt, $category);
+            $stmt->bind_param("sss", $savedUrl, $fileAlt, $category);
             $stmt->execute();
             $stmt->close();
             $uploaded++;
@@ -204,7 +214,7 @@ include 'includes/layout_top.php';
 <div class="gallery-grid" id="galleryGrid">
   <?php foreach ($imageFiles as $img): ?>
   <div class="gallery-cell" id="gcell-<?= $img['id'] ?>">
-    <img src="<?= $galleryWeb . htmlspecialchars($img['filename']) ?>" alt="" loading="lazy">
+    <img src="<?= strpos($img['filename'], 'http') === 0 ? htmlspecialchars($img['filename']) : $galleryWeb . htmlspecialchars($img['filename']) ?>" alt="" loading="lazy">
 
     <!-- Category badge -->
     <div class="gc-badge gc-badge--<?= $img['category'] ?>" id="gbadge-<?= $img['id'] ?>">

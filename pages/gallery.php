@@ -44,7 +44,7 @@ include '../includes/header.php';
     <div class="g-item" data-cat="<?= $photo['category'] ?>" data-index="<?= $i ?>">
       <div class="g-inner">
         <img
-          src="../static/images/gallery/<?= htmlspecialchars($photo['filename']) ?>"
+          src="<?= strpos($photo['filename'], 'http') === 0 ? htmlspecialchars($photo['filename']) : '../static/images/gallery/' . htmlspecialchars($photo['filename']) ?>"
           alt="<?= htmlspecialchars($photo['alt']) ?>"
         >
         <div class="g-overlay">
