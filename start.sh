@@ -19,13 +19,13 @@ echo "[start] MySQL TCP port is open."
 
 sleep 2
 
-TABLE_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
-    -e "SHOW TABLES;" 2>/dev/null | wc -l || echo "0")
+MYSQL_CMD="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} --ssl=0 ${DB_NAME}"
+
+TABLE_COUNT=$($MYSQL_CMD -e "SHOW TABLES;" 2>/dev/null | wc -l || echo "0")
 
 if [ "$TABLE_COUNT" -lt 2 ]; then
     echo "[start] Importing database..."
-    mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
-        < /var/www/html/CoffeeTime.sql \
+    $MYSQL_CMD < /var/www/html/CoffeeTime.sql \
         && echo "[start] Database imported." \
         || echo "[start] Import failed, continuing anyway."
 else
