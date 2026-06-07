@@ -20,17 +20,21 @@ sleep 3
 
 MYSQL="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} --ssl=0"
 
-echo "[start] Resetting database..."
-$MYSQL -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;" \
-    && echo "[start] Database reset." \
-    || { echo "[start] Reset failed, trying import anyway."; }
+echo "[start] Checking database state..."
+USER_COUNT=$($MYSQL -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}' AND table_name='users';" 2>/dev/null || echo "0")
 
-echo "[start] Importing database..."
-$MYSQL --force "${DB_NAME}" < /var/www/html/CoffeeTime.sql \
-    && echo "[start] Database imported successfully." \
-    || echo "[start] Import finished with warnings."
+if [ "$USER_COUNT" -eq "0" ]; then
+    echo "[start] Database is empty — importing initial schema..."
+    $MYSQL -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;" \
+        && echo "[start] Database ensured."
+    $MYSQL --force "${DB_NAME}" < /var/www/html/CoffeeTime.sql \
+        && echo "[start] Database imported successfully." \
+        || echo "[start] Import finished with warnings."
+else
+    echo "[start] Database already has data — skipping import to preserve user data."
+fi
 
-echo "[start] Verifying import..."
+echo "[start] Verifying tables..."
 TABLE_COUNT=$($MYSQL -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';" 2>/dev/null || echo "0")
 echo "[start] Tables in DB: ${TABLE_COUNT}"
 
