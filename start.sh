@@ -19,7 +19,7 @@ echo "[start] MySQL TCP port is open."
 
 sleep 2
 
-MYSQL_CMD="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} --ssl=0 ${DB_NAME}"
+MYSQL_CMD="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} --ssl=0 --force ${DB_NAME}"
 
 TABLE_COUNT=$($MYSQL_CMD -e "SHOW TABLES;" 2>/dev/null | wc -l || echo "0")
 
