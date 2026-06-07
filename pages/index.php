@@ -67,7 +67,15 @@ function fetchTopOrderedItems(mysqli $conn, array $tables, int $limit = 3, int $
       $items[] = $prod;
     }
   }
-  return empty($items) ? fetchPopularItems($conn, $tables, $limit) : $items;
+  if (count($items) >= 3) return $items;
+  $popular = fetchPopularItems($conn, $tables, $limit);
+  // merge: popular items not already in $items go first as filler
+  $existing = array_column($items, 'id');
+  foreach ($popular as $p) {
+    if (!in_array($p['id'], $existing)) $items[] = $p;
+    if (count($items) >= $limit) break;
+  }
+  return $items;
 }
 
 $foodItems    = fetchTopOrderedItems($conn, ['fast_food_items', 'pizza_items'], 3);
