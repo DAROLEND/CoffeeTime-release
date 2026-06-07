@@ -44,7 +44,7 @@ function supabase_upload(string $localPath, string $remotePath, string $mime = '
         return rtrim(SUPABASE_URL, '/') . '/storage/v1/object/public/' . SUPABASE_BUCKET . '/' . ltrim($remotePath, '/');
     }
 
-    error_log('[storage] Supabase upload failed (' . $code . '): ' . $resp);
+    error_log('[storage] Supabase upload failed HTTP=' . $code . ' url=' . $url . ' resp=' . $resp);
     return false;
 }
 
@@ -89,10 +89,8 @@ function upload_image(string $tmpPath, string $localDest, string $remotePath, st
     $supabaseUrl = supabase_upload($localDest, $remotePath, $mime);
     if ($supabaseUrl) return $supabaseUrl;
 
-    // Fallback: return relative path
-    $docRoot = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
-    $projRoot = rtrim(dirname(__DIR__), '/');
-    return '/' . ltrim(str_replace($docRoot, '', $localDest), '/');
+    // Fallback: return just the filename (relative, compatible with old display logic)
+    return basename($localDest);
 }
 
 /**
@@ -117,7 +115,5 @@ function upload_image_b64(string $b64, string $localDest, string $remotePath): s
     $supabaseUrl = supabase_upload($finalLocal, $finalRemote, $mime);
     if ($supabaseUrl) return $supabaseUrl;
 
-    $docRoot  = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/');
-    $projRoot = rtrim(dirname(__DIR__), '/');
-    return '/' . ltrim(str_replace($docRoot, '', $finalLocal), '/');
+    return basename($finalLocal);
 }
