@@ -27,7 +27,7 @@ CREATE TABLE `admin_users` (
   `username` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('super','staff') NOT NULL DEFAULT 'staff',
-  `permissions` text NOT NULL DEFAULT '[]',
+  `permissions` text NOT NULL,
   `display_name` varchar(100) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
@@ -60,7 +60,7 @@ CREATE TABLE `cake_items` (
   `min_weight` decimal(4,1) NOT NULL DEFAULT 1.0,
   `is_custom_order` tinyint(1) NOT NULL DEFAULT 1,
   `popularity` int(11) NOT NULL DEFAULT 0,
-  `price` decimal(10,2) GENERATED ALWAYS AS (`price_per_kg`) STORED,
+  `price` decimal(10,2) NOT NULL DEFAULT 1000.00,
   PRIMARY KEY (`id`),
   KEY `popularity` (`popularity`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -661,7 +661,7 @@ DROP TABLE IF EXISTS `site_settings`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `site_settings` (
   `key` varchar(100) NOT NULL,
-  `value` text NOT NULL DEFAULT '',
+  `value` text NOT NULL,
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -778,4 +778,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-08  0:06:17
+-- Dump completed on 2026-06-08  0:56:12
