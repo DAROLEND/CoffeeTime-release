@@ -27,7 +27,7 @@ CREATE TABLE `admin_users` (
   `username` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('super','staff') NOT NULL DEFAULT 'staff',
-  `permissions` text NOT NULL,
+  `permissions` text NOT NULL DEFAULT '[]',
   `display_name` varchar(100) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
@@ -60,7 +60,7 @@ CREATE TABLE `cake_items` (
   `min_weight` decimal(4,1) NOT NULL DEFAULT 1.0,
   `is_custom_order` tinyint(1) NOT NULL DEFAULT 1,
   `popularity` int(11) NOT NULL DEFAULT 0,
-  `price` decimal(10,2) NOT NULL DEFAULT 1000.00,
+  `price` decimal(10,2) GENERATED ALWAYS AS (`price_per_kg`) STORED,
   PRIMARY KEY (`id`),
   KEY `popularity` (`popularity`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -217,7 +217,7 @@ CREATE TABLE `gallery` (
 
 LOCK TABLES `gallery` WRITE;
 /*!40000 ALTER TABLE `gallery` DISABLE KEYS */;
-INSERT INTO `gallery` VALUES (1,'photo1.png','Фаст-фуд','food','2026-04-18 03:20:15'),(2,'photo2.png','Десерти','food','2026-04-18 03:20:15'),(3,'photo3.png','Бургери','food','2026-04-18 03:20:15'),(4,'photo4.png','Піца','food','2026-04-18 03:20:15'),(5,'photo5.png','Інтер\'єр','interior','2026-04-18 03:20:15'),(6,'photo6.png','Інтер\'єр','interior','2026-04-18 03:20:15'),(7,'photo7.png','Інтер\'єр','interior','2026-04-18 03:20:15'),(8,'photo8.png','Інтер\'єр','interior','2026-04-18 03:20:15'),(9,'photo9.png','Піца','food','2026-04-18 03:20:15'),(10,'photo10.png','Десерти','food','2026-04-18 03:20:15');
+INSERT INTO `gallery` VALUES (1,'photo1.webp','Фаст-фуд','food','2026-04-18 03:20:15'),(2,'photo2.webp','Десерти','food','2026-04-18 03:20:15'),(3,'photo3.webp','Бургери','food','2026-04-18 03:20:15'),(4,'photo4.webp','Піца','food','2026-04-18 03:20:15'),(5,'photo5.webp','Інтер\'єр','interior','2026-04-18 03:20:15'),(6,'photo6.webp','Інтер\'єр','interior','2026-04-18 03:20:15'),(7,'photo7.webp','Інтер\'єр','interior','2026-04-18 03:20:15'),(8,'photo8.webp','Інтер\'єр','interior','2026-04-18 03:20:15'),(9,'photo9.webp','Піца','food','2026-04-18 03:20:15'),(10,'photo10.webp','Десерти','food','2026-04-18 03:20:15');
 /*!40000 ALTER TABLE `gallery` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -778,4 +778,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-07 18:07:12
+-- Dump completed on 2026-06-08  0:06:17
