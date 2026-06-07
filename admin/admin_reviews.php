@@ -289,25 +289,44 @@ include 'includes/layout_top.php';
 </div>
 
 <!-- Filters -->
-<form class="orders-filter" method="get" style="margin-bottom:12px">
-  <select name="rating" class="filter-select">
-    <option value="">Всі оцінки</option>
-    <?php for ($s = 5; $s >= 1; $s--): ?>
-      <option value="<?= $s ?>" <?= $filterRating===$s?'selected':'' ?>><?= $s ?> зірок</option>
-    <?php endfor; ?>
-  </select>
-  <select name="status" class="filter-select">
-    <option value="">Всі статуси</option>
-    <option value="approved"  <?= $filterStatus==='approved' ?'selected':'' ?>>Схвалені</option>
-    <option value="pending"   <?= $filterStatus==='pending'  ?'selected':'' ?>>Очікують</option>
-    <option value="declined"  <?= $filterStatus==='declined' ?'selected':'' ?>>Відхилені</option>
-  </select>
-  <button type="submit" class="filter-btn-search">Фільтр</button>
-  <?php if ($filterRating || $filterStatus): ?>
-    <a href="admin_reviews.php" class="btn-ghost btn-sm">Скинути</a>
-  <?php endif; ?>
-</form>
-<div class="filter-info" style="margin-bottom:14px">Знайдено: <strong><?= $totalRows ?></strong></div>
+<div class="orders-toolbar">
+  <div class="toolbar-chips">
+
+    <!-- Rating chips -->
+    <div class="chip-group">
+      <?php
+        $ratingTabs = [0 => 'Всі оцінки', 5 => '★★★★★', 4 => '★★★★', 3 => '★★★', 2 => '★★', 1 => '★'];
+        foreach ($ratingTabs as $val => $lbl):
+          $active = ($filterRating === $val);
+          $url = '?' . http_build_query(array_merge($_GET, ['rating' => $val ?: '', 'tab' => $adminTab]));
+      ?>
+        <a href="<?= htmlspecialchars($url) ?>" class="fchip <?= $active ? 'fchip--on' : '' ?>"><?= $lbl ?></a>
+      <?php endforeach; ?>
+    </div>
+
+    <span class="chip-sep"></span>
+
+    <!-- Status chips -->
+    <div class="chip-group">
+      <?php
+        $statusTabs = ['' => 'Всі статуси', 'approved' => 'Схвалені', 'pending' => 'Очікують', 'declined' => 'Відхилені'];
+        foreach ($statusTabs as $val => $lbl):
+          $active = ($filterStatus === $val);
+          $url = '?' . http_build_query(array_merge($_GET, ['status' => $val, 'tab' => $adminTab]));
+      ?>
+        <a href="<?= htmlspecialchars($url) ?>" class="fchip <?= $active ? 'fchip--on' : '' ?>"><?= $lbl ?></a>
+      <?php endforeach; ?>
+    </div>
+
+    <?php if ($filterRating || $filterStatus): ?>
+      <a href="admin_reviews.php?tab=<?= htmlspecialchars($adminTab) ?>" class="fchip fchip--reset">✕ Скинути</a>
+    <?php endif; ?>
+
+    <span style="margin-left:auto;font-size:12px;color:#bbb;white-space:nowrap;align-self:center">
+      Знайдено: <strong><?= $totalRows ?></strong>
+    </span>
+  </div>
+</div>
 
 <?php if (isset($_GET['deleted'])): ?>
   <div class="alert alert-success" style="margin-bottom:14px">Відгук видалено.</div>
