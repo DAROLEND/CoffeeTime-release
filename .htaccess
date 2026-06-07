@@ -1,9 +1,8 @@
 Options -Indexes
 
 RewriteEngine On
-RewriteBase /CoffeeTime-release/
 
 # ── 404: redirect non-existent pages to homepage ──
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ pages/index.php [R=302,L]
+RewriteRule ^ /pages/index.php [R=302,L]
