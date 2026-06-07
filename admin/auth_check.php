@@ -25,7 +25,7 @@ if (isset($conn)) {
         $conn->query("UPDATE admin_users SET role='super' ORDER BY id ASC LIMIT 1");
     }
     if (!in_array('permissions', $cols)) {
-        $conn->query("ALTER TABLE admin_users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'");
+        $conn->query("ALTER TABLE admin_users ADD COLUMN permissions TEXT NOT NULL");
     }
     if (!in_array('display_name', $cols)) {
         $conn->query("ALTER TABLE admin_users ADD COLUMN display_name VARCHAR(100) NOT NULL DEFAULT ''");

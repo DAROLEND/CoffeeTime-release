@@ -6,7 +6,7 @@ require_perm('content');
 
 $conn->query("CREATE TABLE IF NOT EXISTS site_settings (
   `key`   VARCHAR(100) NOT NULL PRIMARY KEY,
-  `value` TEXT NOT NULL DEFAULT ''
+  `value` TEXT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 $defaults = [
