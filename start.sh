@@ -26,7 +26,9 @@ $MYSQL -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\
     || echo "[start] Reset failed, trying import anyway."
 
 echo "[start] Importing database..."
-$MYSQL "${DB_NAME}" < /var/www/html/CoffeeTime.sql \
+grep -v "^CREATE DATABASE" /var/www/html/CoffeeTime.sql \
+    | grep -v "^USE " \
+    | $MYSQL "${DB_NAME}" \
     && echo "[start] Database imported successfully." \
     || echo "[start] Import finished with warnings."
 
