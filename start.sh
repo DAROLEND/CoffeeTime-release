@@ -16,30 +16,19 @@ until (echo > /dev/tcp/"$DB_HOST"/"$DB_PORT") 2>/dev/null; do
     sleep 2
 done
 echo "[start] MySQL TCP port is open."
-sleep 2
+sleep 3
 
-MYSQL="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} --ssl=0"
+MYSQL="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} --ssl-verify-server-cert=0"
 
-TABLE_COUNT=$($MYSQL "$DB_NAME" -e "SHOW TABLES;" 2>/dev/null | wc -l || echo "0")
+echo "[start] Resetting database..."
+$MYSQL -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;" 2>/dev/null \
+    && echo "[start] Database reset." \
+    || echo "[start] Reset failed, trying import anyway."
 
-if [ "$TABLE_COUNT" -lt 2 ]; then
-    echo "[start] Importing database..."
-    $MYSQL --force "$DB_NAME" < /var/www/html/CoffeeTime.sql \
-        && echo "[start] Database imported." \
-        || echo "[start] Import finished with warnings."
-else
-    echo "[start] Checking database integrity..."
-    ORDER_ITEMS_OK=$($MYSQL "$DB_NAME" -e "SELECT 1 FROM order_items LIMIT 1;" 2>/dev/null | wc -l || echo "0")
-    if [ "$ORDER_ITEMS_OK" -lt 1 ]; then
-        echo "[start] Detected corrupted tables, reimporting..."
-        $MYSQL -e "DROP DATABASE \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\`;" 2>/dev/null || true
-        $MYSQL --force "$DB_NAME" < /var/www/html/CoffeeTime.sql \
-            && echo "[start] Database reimported." \
-            || echo "[start] Reimport finished with warnings."
-    else
-        echo "[start] Database OK (${TABLE_COUNT} tables)."
-    fi
-fi
+echo "[start] Importing database..."
+$MYSQL "${DB_NAME}" < /var/www/html/CoffeeTime.sql \
+    && echo "[start] Database imported successfully." \
+    || echo "[start] Import finished with warnings."
 
 echo "[start] Fixing Apache MPM..."
 rm -f /etc/apache2/mods-enabled/mpm_event.conf \
