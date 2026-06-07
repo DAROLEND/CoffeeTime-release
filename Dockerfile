@@ -4,7 +4,7 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y \
     libgd-dev libpng-dev libjpeg-dev libwebp-dev \
     libzip-dev libonig-dev libcurl4-openssl-dev libintl-dev \
-    default-mysql-client \
+    mariadb-client \
     && rm -rf /var/lib/apt/lists/*
 
 # PHP extensions
