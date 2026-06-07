@@ -1,0 +1,15 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/start.sh"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.variables]
+DB_HOST = "${{MySQL.MYSQLHOST}}"
+DB_PORT = "${{MySQL.MYSQLPORT}}"
+DB_NAME = "${{MySQL.MYSQLDATABASE}}"
+DB_USER = "${{MySQL.MYSQLUSER}}"
+DB_PASS = "${{MySQL.MYSQLPASSWORD}}"

@@ -4,6 +4,7 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y \
     libgd-dev libpng-dev libjpeg-dev libwebp-dev \
     libzip-dev libonig-dev libcurl4-openssl-dev libintl-dev \
+    default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # PHP extensions
@@ -16,6 +17,8 @@ RUN a2enmod rewrite \
  && sed -i 's|AllowOverride None|AllowOverride All|g' /etc/apache2/apache2.conf
 
 COPY . /var/www/html/
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
 # Never ship a local .env into the image
 RUN rm -f /var/www/html/.env
