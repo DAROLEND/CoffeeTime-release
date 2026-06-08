@@ -67,11 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
         $imagePath = '';
+        $remoteBase = 'menu_items/' . $subfolder;
         if (!empty($_POST['image_b64'])) {
-            $fname = uniqid('item_', true);
-            $ext   = save_cropped_image($_POST['image_b64'], $uploadDir . $fname . '.jpg');
-            if ($ext) $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fname . '.' . $ext;
-            else $errors[] = 'Помилка збереження зображення.';
+            $fname  = uniqid('item_', true);
+            $saved  = upload_image_b64($_POST['image_b64'], $uploadDir . $fname, $remoteBase . '/' . $fname);
+            if ($saved) {
+                $imagePath = str_starts_with($saved, 'http') ? $saved
+                    : 'static/images/menu_items/' . $subfolder . '/' . $saved;
+            } else {
+                $errors[] = 'Помилка збереження зображення.';
+            }
         } else {
             $ext         = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
             $allowed_ext = ['jpg','jpeg','png','webp','gif'];
@@ -79,10 +84,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = 'Дозволені формати: JPG, PNG, WebP, GIF.';
             } else {
                 $fileName = uniqid('item_', true) . '.' . $ext;
-                if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $fileName))
-                    $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fileName;
-                else
+                $mime     = in_array($ext, ['png']) ? 'image/png' : ($ext === 'webp' ? 'image/webp' : 'image/jpeg');
+                $saved    = upload_image($_FILES['image']['tmp_name'], $uploadDir . $fileName, $remoteBase . '/' . $fileName, $mime);
+                if ($saved) {
+                    $imagePath = str_starts_with($saved, 'http') ? $saved
+                        : 'static/images/menu_items/' . $subfolder . '/' . $saved;
+                } else {
                     $errors[] = 'Не вдалося зберегти зображення.';
+                }
             }
         }
 

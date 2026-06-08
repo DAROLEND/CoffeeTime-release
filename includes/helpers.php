@@ -141,6 +141,7 @@ if (!function_exists('item_img')) {
     function item_img(string $raw, string $prefix = '../'): string {
         $raw = trim($raw);
         if ($raw === '' || $raw === 'static/images/menu_items/default.jpg') return '';
+        if (str_starts_with($raw, 'http')) return $raw;
         return $prefix . ltrim($raw, '/');
     }
 }

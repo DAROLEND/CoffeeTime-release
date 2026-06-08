@@ -69,15 +69,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $uploadDir = __DIR__ . '/../static/images/menu_items/' . $subfolder . '/';
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
+    $remoteBase = 'menu_items/' . $subfolder;
+
+    $deleteOldImage = function() use (&$imagePath, $uploadDir, $subfolder) {
+        if (!$imagePath) return;
+        if (str_starts_with($imagePath, 'http')) {
+            $parsed = parse_url($imagePath, PHP_URL_PATH);
+            $prefix = '/storage/v1/object/public/' . SUPABASE_BUCKET . '/';
+            if (str_starts_with($parsed, $prefix)) supabase_delete(substr($parsed, strlen($prefix)));
+        } else {
+            $local = __DIR__ . '/../' . $imagePath;
+            if (file_exists($local)) @unlink($local);
+        }
+    };
+
     if (!empty($_POST['remove_image']) && $_POST['remove_image'] === '1' && empty($_POST['image_b64']) && ($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        if ($imagePath && file_exists(__DIR__ . '/../' . $imagePath)) @unlink(__DIR__ . '/../' . $imagePath);
+        $deleteOldImage();
         $imagePath = '';
     } elseif (!empty($_POST['image_b64'])) {
         $fname = uniqid('item_', true);
-        $ext   = save_cropped_image($_POST['image_b64'], $uploadDir . $fname . '.jpg');
-        if ($ext) {
-            if ($imagePath && file_exists(__DIR__ . '/../' . $imagePath)) @unlink(__DIR__ . '/../' . $imagePath);
-            $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fname . '.' . $ext;
+        $saved = upload_image_b64($_POST['image_b64'], $uploadDir . $fname, $remoteBase . '/' . $fname);
+        if ($saved) {
+            $deleteOldImage();
+            $imagePath = str_starts_with($saved, 'http') ? $saved
+                : 'static/images/menu_items/' . $subfolder . '/' . $saved;
         } else {
             $errors[] = 'Помилка збереження зображення.';
         }
@@ -88,9 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Дозволені формати: JPG, PNG, WebP, GIF.';
         } else {
             $fileName = uniqid('item_', true) . '.' . $ext;
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $fileName)) {
-                if ($imagePath && file_exists(__DIR__ . '/../' . $imagePath)) @unlink(__DIR__ . '/../' . $imagePath);
-                $imagePath = 'static/images/menu_items/' . $subfolder . '/' . $fileName;
+            $mime     = in_array($ext, ['png']) ? 'image/png' : ($ext === 'webp' ? 'image/webp' : 'image/jpeg');
+            $saved    = upload_image($_FILES['image']['tmp_name'], $uploadDir . $fileName, $remoteBase . '/' . $fileName, $mime);
+            if ($saved) {
+                $deleteOldImage();
+                $imagePath = str_starts_with($saved, 'http') ? $saved
+                    : 'static/images/menu_items/' . $subfolder . '/' . $saved;
             } else {
                 $errors[] = 'Не вдалося зберегти зображення.';
             }
