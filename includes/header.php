@@ -40,6 +40,9 @@ if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
       <link rel="stylesheet" href="<?= h($href) ?>?v=<?= $ver ?>">
     <?php endforeach; ?>
   <?php endif; ?>
+  <?php if (!empty($preloadHeroImage)): ?>
+  <link rel="preload" as="image" href="<?= h($_SP . '/' . ltrim($preloadHeroImage, '/')) ?>">
+  <?php endif; ?>
   <link rel="stylesheet" href="<?= $_SP ?>/static/css/animations.css">
   <script defer src="<?= $_SP ?>/static/js/animations.js"></script>
   <script defer src="<?= $_SP ?>/static/js/header.js"></script>

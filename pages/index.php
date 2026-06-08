@@ -14,9 +14,9 @@ try {
 /* Fallback if table missing or empty */
 if (empty($heroSlides)) {
     $heroSlides = [
-        ['image' => 'static/images/categories/coffee_category.jpg', 'text' => 'Кожен ковток — тепла історія',  'sub' => "Свіжозварена кава щоранку з любов'ю"],
-        ['image' => 'static/images/categories/dessert.jpg',          'text' => 'Неможливо встояти…',            'sub' => 'Десерти власного приготування щодня'],
-        ['image' => 'static/images/categories/fast_food.jpg',        'text' => 'Ідеальне комбо',               'sub' => 'Смачно, ситно і завжди свіже'],
+        ['image' => 'static/images/categories/coffee_category.webp', 'text' => 'Кожен ковток — тепла історія',  'sub' => "Свіжозварена кава щоранку з любов'ю"],
+        ['image' => 'static/images/categories/dessert.webp',          'text' => 'Неможливо встояти…',            'sub' => 'Десерти власного приготування щодня'],
+        ['image' => 'static/images/categories/fast_food.webp',        'text' => 'Ідеальне комбо',               'sub' => 'Смачно, ситно і завжди свіже'],
     ];
 }
 
@@ -155,6 +155,7 @@ $customStyles = [
   '../static/css/slider_food.css',
   '../static/css/homepage.css',
 ];
+$preloadHeroImage = $heroSlides[0]['image'] ?? '';
 include '../includes/header.php';
 ?>
 <body>
