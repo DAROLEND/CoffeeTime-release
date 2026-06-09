@@ -6,63 +6,78 @@ require_super();
 $conn->set_charset('utf8mb4');
 header('Content-Type: text/plain; charset=utf-8');
 
+// Pass ?check=1 to see what's actually in the DB before updating
+if (!empty($_GET['check'])) {
+    $tables = ['fast_food_items','cold_drink_items','salad_items','cake_items','ice_cream_items','sauces'];
+    foreach ($tables as $t) {
+        echo "=== $t ===\n";
+        $r = $conn->query("SELECT id, name, image FROM `$t` ORDER BY id");
+        while ($row = $r->fetch_assoc()) {
+            echo $row['id'] . "\t[" . $row['name'] . "]\t" . $row['image'] . "\n";
+        }
+        echo "\n";
+    }
+    exit;
+}
+
+// UPDATE by ID to avoid encoding issues
 $updates = [
-    // fast_food_items — default / empty
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/strips.webp',          'Стріпси'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/onion circles.webp',   'Цибулеві кільця'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/nagets.webp',          'Нагетси'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/potato balls.webp',    'Картопляні кульки'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/potato by village.webp','Картопля по-селянськи'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/hot-dog.webp',         'Французький хот-дог'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/american hot-dog.webp','Американський хот-дог'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/lavash.webp',          'Лаваш'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/corn.webp',            'Кукурудза з сиром'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/panini.webp',          'Паніні'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/cheesburger.webp',     'Чізбургер'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/burger.webp',          'Гамбургер'],
-    ["UPDATE fast_food_items SET image=? WHERE name=?",  'static/images/menu_items/fast_food/potato free.webp',     'Картопля Фрі'],
+    // fast_food_items
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/strips.webp',           5],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/onion circles.webp',    7],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/nagets.webp',           8],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/potato balls.webp',     10],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/potato by village.webp',12],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/hot-dog.webp',          15],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/american hot-dog.webp', 16],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/lavash.webp',           17],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/corn.webp',             22],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/panini.webp',           23],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/cheesburger.webp',      13],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/burger.webp',           14],
+    ["UPDATE fast_food_items SET image=? WHERE id=?",  'static/images/menu_items/fast_food/potato free.webp',      11],
 
     // cold_drink_items
-    ["UPDATE cold_drink_items SET image=? WHERE name=?", 'static/images/menu_items/cold_drinks/mohito.webp',        'Мохіто'],
-    ["UPDATE cold_drink_items SET image=? WHERE name=?", 'static/images/menu_items/cold_drinks/milk coctail.webp',  'Молочний коктейль'],
-    ["UPDATE cold_drink_items SET image=? WHERE name=?", 'static/images/menu_items/cold_drinks/fruit coctail.webp', 'Фруктовий коктейль'],
-    ["UPDATE cold_drink_items SET image=? WHERE name=?", 'static/images/menu_items/cold_drinks/bubble tea.webp',    'Бабл ті'],
-    ["UPDATE cold_drink_items SET image=? WHERE name=?", 'static/images/menu_items/cold_drinks/kakao bubble.webp',  'Какао бабл'],
+    ["UPDATE cold_drink_items SET image=? WHERE id=?", 'static/images/menu_items/cold_drinks/mohito.webp',         4],
+    ["UPDATE cold_drink_items SET image=? WHERE id=?", 'static/images/menu_items/cold_drinks/milk coctail.webp',   5],
+    ["UPDATE cold_drink_items SET image=? WHERE id=?", 'static/images/menu_items/cold_drinks/fruit coctail.webp',  6],
+    ["UPDATE cold_drink_items SET image=? WHERE id=?", 'static/images/menu_items/cold_drinks/bubble tea.webp',     7],
+    ["UPDATE cold_drink_items SET image=? WHERE id=?", 'static/images/menu_items/cold_drinks/kakao bubble.webp',   8],
 
     // salad_items
-    ["UPDATE salad_items SET image=? WHERE name=?",      'static/images/menu_items/salads/tsezar with losos.webp',  'Цезар з лососем'],
-    ["UPDATE salad_items SET image=? WHERE name=?",      'static/images/menu_items/salads/greece salad.webp',       'Грецький'],
-    ["UPDATE salad_items SET image=? WHERE name=?",      'static/images/menu_items/salads/iceberg.webp',            'Айсберг'],
-    ["UPDATE salad_items SET image=? WHERE name=?",      'static/images/menu_items/salads/tsezar wuth chicken.webp','Цезар з куркою'],
-    ["UPDATE salad_items SET image=? WHERE name=?",      'static/images/menu_items/salads/hunter salad.webp',       'Мисливський'],
-    ["UPDATE salad_items SET image=? WHERE name=?",      'static/images/menu_items/salads/salad with tuna.webp',    'З тунцем'],
+    ["UPDATE salad_items SET image=? WHERE id=?",      'static/images/menu_items/salads/tsezar with losos.webp',   1],
+    ["UPDATE salad_items SET image=? WHERE id=?",      'static/images/menu_items/salads/greece salad.webp',        2],
+    ["UPDATE salad_items SET image=? WHERE id=?",      'static/images/menu_items/salads/iceberg.webp',             3],
+    ["UPDATE salad_items SET image=? WHERE id=?",      'static/images/menu_items/salads/tsezar wuth chicken.webp', 4],
+    ["UPDATE salad_items SET image=? WHERE id=?",      'static/images/menu_items/salads/hunter salad.webp',        5],
+    ["UPDATE salad_items SET image=? WHERE id=?",      'static/images/menu_items/salads/salad with tuna.webp',     6],
 
-    // cake_items (Медовик і Наполеон зберігаються в desserts/)
-    ["UPDATE cake_items SET image=? WHERE name=?",       'static/images/menu_items/desserts/medovik.webp',          'Медовик'],
-    ["UPDATE cake_items SET image=? WHERE name=?",       'static/images/menu_items/desserts/napolen.webp',          'Наполеон'],
-    ["UPDATE cake_items SET image=? WHERE name=?",       'static/images/menu_items/cakes/choco cake.webp',          'Шоколадний'],
-    ["UPDATE cake_items SET image=? WHERE name=?",       'static/images/menu_items/cakes/child cake.webp',          'Дитячий торт'],
+    // cake_items
+    ["UPDATE cake_items SET image=? WHERE id=?",       'static/images/menu_items/desserts/medovik.webp',           1],
+    ["UPDATE cake_items SET image=? WHERE id=?",       'static/images/menu_items/desserts/napolen.webp',           2],
+    ["UPDATE cake_items SET image=? WHERE id=?",       'static/images/menu_items/cakes/choco cake.webp',           3],
+    ["UPDATE cake_items SET image=? WHERE id=?",       'static/images/menu_items/cakes/child cake.webp',           5],
 
     // ice_cream_items
-    ["UPDATE ice_cream_items SET image=? WHERE name=?",  'static/images/menu_items/ice_cream/ice cream.webp',       'Морозиво'],
+    ["UPDATE ice_cream_items SET image=? WHERE id=?",  'static/images/menu_items/ice_cream/ice cream.webp',        1],
 
     // sauces
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce ketchup.webp',      'Кетчуп'],
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce bbq.webp',          'Барбекю'],
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce heese.webp',        'Сирний'],
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce sour-sweet.webp',   'Кисло-солодкий'],
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce garlic.webp',       'Часниковий'],
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce mustard.webp',      'Гірчиця'],
-    ["UPDATE sauces SET image=? WHERE name=?",           'static/images/menu_items/sauces/sauce mayo.webp',         'Майонез'],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce ketchup.webp',       1],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce bbq.webp',           2],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce heese.webp',         3],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce sour-sweet.webp',    4],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce garlic.webp',        5],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce mustard.webp',       6],
+    ["UPDATE sauces SET image=? WHERE id=?",           'static/images/menu_items/sauces/sauce mayo.webp',          7],
 ];
 
 $ok = 0; $fail = 0;
-foreach ($updates as [$sql, $img, $name]) {
+foreach ($updates as [$sql, $img, $id]) {
     $s = $conn->prepare($sql);
-    $s->bind_param('ss', $img, $name);
+    $s->bind_param('si', $img, $id);
     $s->execute();
-    if ($s->affected_rows > 0) { $ok++; echo "OK: $name\n"; }
-    else { $fail++; echo "MISS: $name\n"; }
+    if ($s->affected_rows > 0) { $ok++; echo "OK: id=$id\n"; }
+    else { $fail++; echo "MISS: id=$id\n"; }
     $s->close();
 }
 echo "\nDone. $ok updated, $fail not found.\n";
