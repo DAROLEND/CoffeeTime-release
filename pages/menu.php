@@ -734,6 +734,11 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
   if (!el) el = document.getElementById('item-' + itemId);
   if (!el) return;
   el.classList.remove('lazy-hidden');
+  /* Mark card so cardIO won't re-animate it, and stop the CSS animation immediately */
+  el.dataset.spotlightTarget = '1';
+  el.style.animation = 'none';
+  el.style.opacity   = '1';
+  if (window._cardIO) window._cardIO.unobserve(el);
 
   /* Custom smooth scroll with easing + callback when done */
   function smoothScrollTo(targetY, duration, onDone) {
@@ -758,9 +763,9 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
       ? Array.from(grid.querySelectorAll('.menu-card:not(.lazy-hidden)')).filter(function(c){ return c !== el; })
       : [];
 
-    /* 1. Freeze animations + set opacity:1 on everyone */
+    /* 1. Freeze animations + set opacity:1 on siblings */
     siblings.forEach(function(c) { c.style.animation = 'none'; c.style.opacity = '1'; });
-    el.style.animation = 'none'; el.style.opacity = '1';
+    el.style.opacity = '1';
 
     /* 2. Force reflow so browser registers the new opacity:1 baseline */
     document.body.getBoundingClientRect();
@@ -786,7 +791,7 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
       el.style.transition = 'box-shadow 1.2s ease, transform 0.5s ease';
       el.style.boxShadow  = 'none';
       el.style.transform  = 'scale(1)';
-      setTimeout(function() { el.style.cssText = ''; }, 1200);
+      setTimeout(function() { el.style.cssText = ''; delete el.dataset.spotlightTarget; }, 1200);
     }, 2000);
   }
 
