@@ -17,6 +17,9 @@ $log[] = "DELETE Хлібні палички (pizza id=66): " . $conn->affected_
 $conn->query("DELETE FROM mini_pizza_items");
 $log[] = "DELETE all mini_pizza_items: " . $conn->affected_rows . " rows";
 
+$conn->query("DELETE FROM cake_items WHERE id=4");
+$log[] = "DELETE Фрезьє (cake_items id=4): " . $conn->affected_rows . " rows";
+
 /* ── 2. Fix pizza images by name (IDs differ on Railway) ── */
 $pizzaImages = [
     'Салямі'          => 'static/images/menu_items/pizza/salami.webp',
