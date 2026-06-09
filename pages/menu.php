@@ -4,15 +4,20 @@ require '../db/db.php';
 require_once '../includes/icons.php';
 
 $tables = [
+    // Напої
     'coffee_items'      => 'Кава',
-    'fast_food_items'   => 'Фаст-фуд',
-    'pizza_items'       => 'Піца',
     'cold_drink_items'  => 'Холодні напої',
+    // Їжа
+    'pizza_items'       => 'Піца',
+    'salad_items'       => 'Салати',
     'dessert_items'     => 'Десерти',
+    'cake_items'        => 'Торти на замовлення',
+    // Фаст-фуд
+    'fast_food_items'   => 'Фаст-фуд',
+    // Суші
     'sushi_items'       => 'Суші',
     'sushi_sets'        => 'Сети суші',
-    'salad_items'       => 'Салати',
-    'cake_items'        => 'Торти на замовлення',
+    // Доповнення
     'sauces'            => 'Соуси',
 ];
 
