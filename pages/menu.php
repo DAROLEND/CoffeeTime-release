@@ -195,6 +195,7 @@ function renderCard(array $item, string $tbl, string $label, array $cartKeys, in
              data-name="<?= e(mb_strtolower($item['name'])) ?>"
              data-desc="<?= e(mb_strtolower($item['description'] ?? '')) ?>"
              data-category="<?= e($tbl) ?>"
+             data-order="<?= $cardIdx ?>"
              data-price="<?= (float)$item['price'] ?>"
              data-ordered="<?= $popularity ?>"
              <?= $tbl === 'coffee_items' ? 'data-is-cold="' . (int)(!empty($item['is_cold'])) . '"' : '' ?>
