@@ -728,54 +728,74 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
   var itemId = window._scrollTo;
   if (!itemId) return;
   window._scrollTo = 0;
-  /* Find by category + item-id to avoid duplicate id conflicts across sections */
+
   var cat = window._currentCat || '';
   var el  = document.querySelector('[data-category="' + cat + '"][data-item-id="' + itemId + '"]');
-  if (!el) el = document.getElementById('item-' + itemId); /* fallback */
+  if (!el) el = document.getElementById('item-' + itemId);
   if (!el) return;
   el.classList.remove('lazy-hidden');
+
+  /* Custom smooth scroll with easing + callback when done */
+  function smoothScrollTo(targetY, duration, onDone) {
+    var startY = window.pageYOffset;
+    var dist   = Math.max(0, targetY) - startY;
+    var t0     = null;
+    function step(ts) {
+      if (!t0) t0 = ts;
+      var p = Math.min((ts - t0) / duration, 1);
+      /* ease-in-out cubic */
+      var e = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3) / 2;
+      window.scrollTo(0, startY + dist * e);
+      if (p < 1) { requestAnimationFrame(step); } else if (onDone) { onDone(); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function applySpotlight() {
+    var grid     = el.closest('.menu-grid');
+    /* Only visible (non-lazy-hidden) cards */
+    var siblings = grid
+      ? Array.from(grid.querySelectorAll('.menu-card:not(.lazy-hidden)')).filter(function(c){ return c !== el; })
+      : [];
+
+    /* 1. Freeze animations + set opacity:1 on everyone */
+    siblings.forEach(function(c) { c.style.animation = 'none'; c.style.opacity = '1'; });
+    el.style.animation = 'none'; el.style.opacity = '1';
+
+    /* 2. Force reflow so browser registers the new opacity:1 baseline */
+    document.body.getBoundingClientRect();
+
+    /* 3. Dim siblings with transition */
+    siblings.forEach(function(c) {
+      c.style.transition = 'opacity 0.4s ease';
+      c.style.opacity    = '0.15';
+    });
+
+    /* 4. Glow + scale target */
+    el.style.transition = 'box-shadow 0.3s ease, transform 0.3s ease';
+    el.style.boxShadow  = '0 0 0 3px #FFC107, 0 0 32px 8px rgba(255,193,7,0.5)';
+    el.style.transform  = 'scale(1.04)';
+
+    /* 5. Restore after 2s */
+    setTimeout(function() {
+      siblings.forEach(function(c) {
+        c.style.transition = 'opacity 0.9s ease';
+        c.style.opacity    = '1';
+        setTimeout(function() { c.style.cssText = ''; }, 900);
+      });
+      el.style.transition = 'box-shadow 1.2s ease, transform 0.5s ease';
+      el.style.boxShadow  = 'none';
+      el.style.transform  = 'scale(1)';
+      setTimeout(function() { el.style.cssText = ''; }, 1200);
+    }, 2000);
+  }
+
   window.addEventListener('load', function() {
     setTimeout(function() {
-      var stickyBar = document.querySelector('.menu-tabs-outer');
-      var stickyH   = stickyBar ? stickyBar.offsetHeight : 60;
-      var offset    = el.getBoundingClientRect().top + window.pageYOffset - 76 - stickyH - 20;
-      window.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
-      /* Spotlight: dim siblings, highlight target */
-      var grid     = el.closest('.menu-grid');
-      var siblings = grid ? Array.from(grid.querySelectorAll('.menu-card')).filter(function(c){ return c !== el; }) : [];
-
-      /* Stop CSS animation on siblings so opacity is writable, then dim */
-      siblings.forEach(function(c) {
-        c.style.animation = 'none';
-        c.style.opacity   = '1';
-      });
-      void el.offsetWidth; /* reflow */
-      siblings.forEach(function(c) {
-        c.style.transition = 'opacity 0.35s ease';
-        c.style.opacity    = '0.2';
-      });
-
-      /* Target card: stop animation, apply glow + scale */
-      el.style.animation  = 'none';
-      el.style.opacity    = '1';
-      void el.offsetWidth;
-      el.style.transition = 'none';
-      el.style.boxShadow  = '0 0 0 3px #FFC107, 0 0 32px 8px rgba(255,193,7,0.5)';
-      el.style.transform  = 'scale(1.04)';
-
-      setTimeout(function() {
-        /* Restore siblings */
-        siblings.forEach(function(c) {
-          c.style.transition = 'opacity 0.8s ease';
-          c.style.opacity    = '1';
-          setTimeout(function() { c.style.animation = ''; c.style.opacity = ''; c.style.transition = ''; }, 800);
-        });
-        /* Fade out glow */
-        el.style.transition = 'box-shadow 1.2s ease, transform 0.6s ease';
-        el.style.boxShadow  = 'none';
-        el.style.transform  = 'scale(1)';
-      }, 1700);
-    }, 200);
+      var stickyH = (document.querySelector('.menu-tabs-outer') || {offsetHeight:60}).offsetHeight || 60;
+      var targetY = el.getBoundingClientRect().top + window.pageYOffset - stickyH - 96;
+      smoothScrollTo(Math.max(0, targetY), 900, applySpotlight);
+    }, 150);
   });
 })();
 </script>
