@@ -740,35 +740,41 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
       var stickyH   = stickyBar ? stickyBar.offsetHeight : 60;
       var offset    = el.getBoundingClientRect().top + window.pageYOffset - 76 - stickyH - 20;
       window.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
-      /* Spotlight: semi-transparent overlay over the grid, target card above it */
-      var grid = el.closest('.menu-grid');
-      if (grid) {
-        grid.style.position = 'relative';
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:absolute;inset:-12px;background:rgba(0,0,0,0);z-index:1;pointer-events:none;border-radius:16px;transition:background 0.35s ease;';
-        grid.appendChild(overlay);
-        void overlay.offsetWidth;
-        overlay.style.background = 'rgba(0,0,0,0.45)';
-      }
-      el.style.animation    = 'none';
+      /* Spotlight: dim siblings, highlight target */
+      var grid     = el.closest('.menu-grid');
+      var siblings = grid ? Array.from(grid.querySelectorAll('.menu-card')).filter(function(c){ return c !== el; }) : [];
+
+      /* Stop CSS animation on siblings so opacity is writable, then dim */
+      siblings.forEach(function(c) {
+        c.style.animation = 'none';
+        c.style.opacity   = '1';
+      });
+      void el.offsetWidth; /* reflow */
+      siblings.forEach(function(c) {
+        c.style.transition = 'opacity 0.35s ease';
+        c.style.opacity    = '0.2';
+      });
+
+      /* Target card: stop animation, apply glow + scale */
+      el.style.animation  = 'none';
+      el.style.opacity    = '1';
       void el.offsetWidth;
-      el.style.transition   = 'none';
-      el.style.position     = 'relative';
-      el.style.zIndex       = '2';
-      el.style.opacity      = '1';
-      el.style.boxShadow    = '0 0 0 3px #FFC107, 0 0 32px 8px rgba(255,193,7,0.5)';
-      el.style.transform    = 'scale(1.04)';
+      el.style.transition = 'none';
+      el.style.boxShadow  = '0 0 0 3px #FFC107, 0 0 32px 8px rgba(255,193,7,0.5)';
+      el.style.transform  = 'scale(1.04)';
+
       setTimeout(function() {
-        if (overlay) {
-          overlay.style.transition = 'background 0.9s ease';
-          overlay.style.background = 'rgba(0,0,0,0)';
-          setTimeout(function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 900);
-        }
+        /* Restore siblings */
+        siblings.forEach(function(c) {
+          c.style.transition = 'opacity 0.8s ease';
+          c.style.opacity    = '1';
+          setTimeout(function() { c.style.animation = ''; c.style.opacity = ''; c.style.transition = ''; }, 800);
+        });
+        /* Fade out glow */
         el.style.transition = 'box-shadow 1.2s ease, transform 0.6s ease';
-        el.style.boxShadow  = '0 0 0 0px transparent';
+        el.style.boxShadow  = 'none';
         el.style.transform  = 'scale(1)';
-        setTimeout(function() { el.style.zIndex = ''; el.style.position = ''; }, 1200);
-      }, 1600);
+      }, 1700);
     }, 200);
   });
 })();
