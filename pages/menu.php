@@ -195,6 +195,7 @@ function renderCard(array $item, string $tbl, string $label, array $cartKeys, in
              data-name="<?= e(mb_strtolower($item['name'])) ?>"
              data-desc="<?= e(mb_strtolower($item['description'] ?? '')) ?>"
              data-category="<?= e($tbl) ?>"
+             data-item-id="<?= (int)$item['id'] ?>"
              data-order="<?= $cardIdx ?>"
              data-price="<?= (float)$item['price'] ?>"
              data-ordered="<?= $popularity ?>"
@@ -726,8 +727,11 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
 (function() {
   var itemId = window._scrollTo;
   if (!itemId) return;
-  window._scrollTo = 0; /* clear immediately so re-opens don't re-trigger */
-  var el = document.getElementById('item-' + itemId);
+  window._scrollTo = 0;
+  /* Find by category + item-id to avoid duplicate id conflicts across sections */
+  var cat = window._currentCat || '';
+  var el  = document.querySelector('[data-category="' + cat + '"][data-item-id="' + itemId + '"]');
+  if (!el) el = document.getElementById('item-' + itemId); /* fallback */
   if (!el) return;
   el.classList.remove('lazy-hidden');
   window.addEventListener('load', function() {
@@ -736,12 +740,16 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
       var stickyH   = stickyBar ? stickyBar.offsetHeight : 60;
       var offset    = el.getBoundingClientRect().top + window.pageYOffset - 76 - stickyH - 20;
       window.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
-      el.style.outline      = '2px solid #FFC107';
-      el.style.borderRadius = '14px';
+      /* Prominent highlight: bright glow + scale pulse */
+      el.style.transition  = 'none';
+      el.style.boxShadow   = '0 0 0 3px #FFC107, 0 0 28px 6px rgba(255,193,7,0.45)';
+      el.style.borderRadius = '16px';
+      el.style.transform   = 'scale(1.025)';
       setTimeout(function() {
-        el.style.transition = 'outline-color 0.6s ease';
-        el.style.outline    = '2px solid transparent';
-      }, 900);
+        el.style.transition  = 'box-shadow 1.2s ease, transform 0.5s ease';
+        el.style.boxShadow   = '0 0 0 0px transparent';
+        el.style.transform   = 'scale(1)';
+      }, 1400);
     }, 200);
   });
 })();
