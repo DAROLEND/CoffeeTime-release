@@ -786,17 +786,23 @@ window._scrollTo   = <?= (int)($_GET['scroll_to'] ?? 0) ?>;
     el.style.boxShadow  = '0 0 0 3px #FFC107, 0 0 32px 8px rgba(255,193,7,0.5)';
     el.style.transform  = 'scale(1.04)';
 
-    /* 5. Restore after 2s */
+    /* 5. Restore after 2s — keep opacity:1, only remove spotlight styles */
     setTimeout(function() {
       siblings.forEach(function(c) {
         c.style.transition = 'opacity 0.9s ease';
         c.style.opacity    = '1';
-        setTimeout(function() { c.style.cssText = ''; }, 900);
+        setTimeout(function() {
+          c.style.transition = '';
+          c.style.animation  = '';
+        }, 900);
       });
       el.style.transition = 'box-shadow 1.2s ease, transform 0.5s ease';
-      el.style.boxShadow  = 'none';
-      el.style.transform  = 'scale(1)';
-      setTimeout(function() { el.style.cssText = ''; delete el.dataset.spotlightTarget; }, 1200);
+      el.style.boxShadow  = '';
+      el.style.transform  = '';
+      setTimeout(function() {
+        el.style.transition = '';
+        delete el.dataset.spotlightTarget;
+      }, 1200);
     }, 2000);
   }
 
